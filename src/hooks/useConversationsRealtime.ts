@@ -16,20 +16,17 @@ export function useConversationsRealtime() {
           schema: "public",
           table: "conversations",
         },
-        (payload) => {
-          console.log("Conversation changed:", payload);
+        () => {
           queryClient.invalidateQueries({
             queryKey: conversationsKeys.conversations,
           });
         },
       )
-      .subscribe((status, err) => {
-        console.log("Conversations realtime status:", status);
+      .subscribe((err) => {
         if (err) console.error("Realtime error:", err);
       });
 
     return () => {
-      console.log("supabase.removeChannel(channel)");
       supabase.removeChannel(channel);
     };
   }, [queryClient]);

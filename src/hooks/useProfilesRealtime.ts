@@ -16,7 +16,6 @@ export function useProfilesRealtime() {
           table: "profiles",
         },
         (payload) => {
-          console.log("profiles changed:", payload);
           queryClient.invalidateQueries({
             queryKey: ["profiles"],
           });

@@ -19,7 +19,6 @@ export function useHeartbeat() {
           { user_id: user.id, last_seen: new Date().toISOString() },
           { onConflict: "user_id" }
         );
-        console.log("useHeartbeat")
     };
 
     sendHeartbeat();

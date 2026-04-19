@@ -44,7 +44,7 @@ export function GuestLogin({
   const form = useForm<z.infer<typeof guestSchema>>({
     resolver: zodResolver(guestSchema),
     defaultValues: {
-      name: "guest",
+      name: "",
     },
   });
 
