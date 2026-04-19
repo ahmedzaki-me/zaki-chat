@@ -15,7 +15,7 @@ export function useProfilesRealtime() {
           schema: "public",
           table: "profiles",
         },
-        (payload) => {
+        () => {
           queryClient.invalidateQueries({
             queryKey: ["profiles"],
           });
