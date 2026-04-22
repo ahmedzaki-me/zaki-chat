@@ -91,7 +91,7 @@ function ConversationItem({
         onClick={onClick}
         className={cn(
           "w-full flex items-center gap-3 px-4 py-3 text-left",
-          "transition-colors duration-150 cursor-pointer",
+          "transition-colors duration-150 cursor-pointer ",
           "hover:bg-accent focus-visible:outline-none focus-visible:bg-accent",
           hasUnread && "bg-accent/30",
         )}
@@ -160,7 +160,7 @@ function ConversationItem({
 
               <p
                 className={cn(
-                  "text-xs truncate max-w-55",
+                  "text-xs truncate max-w-55 [unicode-bidi:plaintext]",
                   isTyping
                     ? "text-primary italic"
                     : hasUnread
@@ -172,7 +172,6 @@ function ConversationItem({
               </p>
             </div>
 
-            {/* Badge الـ Unread */}
             {hasUnread && (
               <Badge className="h-5 min-w-5 ...">{unreadCount}</Badge>
             )}

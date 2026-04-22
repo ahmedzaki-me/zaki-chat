@@ -22,9 +22,7 @@ export function useConversationsRealtime() {
           });
         },
       )
-      .subscribe((err) => {
-        if (err) console.error("Realtime error:", err);
-      });
+      .subscribe();
 
     return () => {
       supabase.removeChannel(channel);

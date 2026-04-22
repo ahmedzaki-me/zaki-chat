@@ -115,10 +115,17 @@ export function MessageBubble({
         <Reply className="w-4 h-4" />
       </motion.div>
 
-      <div
+      <MessageActions
+        onCopy={() => navigator.clipboard.writeText(message.content)}
+        onReply={() => onReply?.(message)}
+        onDelete={
+          isOwn && !message.is_deleted
+            ? () => deleteMessage(message.id)
+            : undefined
+        }
         className={cn(
           "relative max-w-[75%] px-2 py-2 shadow-sm transition-all",
-          "wrap-anywhere rounded-xl backdrop-blur flex flex-col",
+          "wrap-anywhere rounded-xl backdrop-blur flex flex-col [unicode-bidi:plaintext]",
           isOwn
             ? "bg-chart-5 text-white/90"
             : "bg-card filter drop-shadow-[0_1px_1px_rgba(0,0,0,0.1)] text-foreground/90",
@@ -152,7 +159,9 @@ export function MessageBubble({
             <p>
               {message.reply_to?.sender_id === user?.id
                 ? "you"
-                : !isOwner && "Ahmed Zaki"}
+                : !isOwner
+                  ? "Ahmed Zaki"
+                  : "user"}
             </p>
 
             {message.reply_to?.is_deleted ? (
@@ -171,67 +180,58 @@ export function MessageBubble({
             )}
           </button>
         )}
-        <MessageActions
-          onCopy={() => navigator.clipboard.writeText(message.content)}
-          onReply={() => onReply?.(message)}
-          onDelete={
-            isOwn && !message.is_deleted
-              ? () => deleteMessage(message.id)
-              : undefined
-          }
-        >
-          <div className="flex gap-1.5 flex-wrap">
-            <p className="text-[16px] [unicode-bidi:plaintext] whitespace-pre-wrap">
-              {message.is_deleted ? (
-                <span className="opacity-60 italic">
-                  <Ban className="w-4.5 h-4.5 inline mb-0.5 text-red-600 dark:text-red-700" />{" "}
-                  {message.content
-                    ? parseMessageWithLinks(message.content, isOwn)
-                    : "This message was deleted"}
-                </span>
-              ) : (
-                parseMessageWithLinks(message.content, isOwn)
-              )}
-            </p>
 
-            <div
-              className={cn(
-                "flex items-end gap-1 mt-1.5 justify-self-start ml-auto",
-                isOwn ? "justify-end" : "justify-start",
-              )}
-            >
-              <span className="text-[11px] opacity-70">
-                {formatTime(message.created_at)}
+        <div className="flex gap-1.5 flex-wrap ">
+          <p className="text-[16px] [unicode-bidi:plaintext] whitespace-pre-wrap">
+            {message.is_deleted ? (
+              <span className="opacity-60 italic">
+                <Ban className="w-4.5 h-4.5 inline mb-0.5 text-red-600 dark:text-red-700" />{" "}
+                {message.content
+                  ? parseMessageWithLinks(message.content, isOwn)
+                  : "This message was deleted"}
               </span>
+            ) : (
+              parseMessageWithLinks(message.content, isOwn)
+            )}
+          </p>
 
-              {isOwn && !isSending && !isError && (
-                <CheckCheck
-                  className={cn(
-                    "h-4 w-4",
-                    message.is_read ? "text-sky-300" : "text-white/80",
-                  )}
-                />
-              )}
+          <div
+            className={cn(
+              "flex items-end gap-1 mt-1.5 justify-self-start ml-auto [unicode-bidi:plaintext]",
+              isOwn ? "justify-end" : "justify-start",
+            )}
+          >
+            <span className="text-[11px] opacity-70">
+              {formatTime(message.created_at)}
+            </span>
 
-              {isSending && (
-                <div className="h-2.5 w-2.5 rounded-full border-2 border-white/50 border-t-transparent animate-spin" />
-              )}
+            {isOwn && !isSending && !isError && (
+              <CheckCheck
+                className={cn(
+                  "h-4 w-4",
+                  message.is_read ? "text-sky-300" : "text-white/80",
+                )}
+              />
+            )}
 
-              {isError && (
-                <div className="flex items-center gap-2">
-                  <AlertCircle className="h-3 w-3 text-destructive" />
-                  <button
-                    onClick={() => onRetry?.(message)}
-                    className="text-[10px] font-bold underline hover:text-destructive-foreground/80"
-                  >
-                    Retry
-                  </button>
-                </div>
-              )}
-            </div>
+            {isSending && (
+              <div className="h-2.5 w-2.5 rounded-full border-2 border-white/50 border-t-transparent animate-spin" />
+            )}
+
+            {isError && (
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-3 w-3 text-destructive" />
+                <button
+                  onClick={() => onRetry?.(message)}
+                  className="text-[10px] font-bold underline hover:text-destructive-foreground/80"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
           </div>
-        </MessageActions>
-      </div>
+        </div>
+      </MessageActions>
     </motion.div>
   );
 }

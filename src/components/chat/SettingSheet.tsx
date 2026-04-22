@@ -199,9 +199,10 @@ export function SettingSheet({ children }: { children: ReactNode }) {
                 },
                 {
                   icon: faFacebook,
-                  href: "https://www.facebook.com/share/172y3NuuF3/",
+                  href: "https://www.facebook.com/AhmedZaki.dev/",
                   color: "hover:text-[#1877F2]",
                 },
+                
                 {
                   icon: faWhatsapp,
                   href: "https://wa.me/201286113602",

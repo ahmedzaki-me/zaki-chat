@@ -28,7 +28,7 @@ export function MessageActions({
     <ContextMenu>
       <ContextMenuTrigger className={className}>{children}</ContextMenuTrigger>
 
-      <ContextMenuContent>
+      <ContextMenuContent className="-translate-y-full">
         <ContextMenuGroup>
           <ContextMenuItem onSelect={onCopy}>
             <CopyIcon />
@@ -39,7 +39,6 @@ export function MessageActions({
             Reply
           </ContextMenuItem>
         </ContextMenuGroup>
-
         {onDelete && (
           <>
             <ContextMenuSeparator />
