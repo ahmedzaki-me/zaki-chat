@@ -328,7 +328,7 @@ export function MessageInput({
             rows={1}
             className="flex-1 bg-transparent! border-0 shadow-none focus-visible:ring-0
                     text-sm py-2 px-0 resize-none min-h-9 max-h-50 overflow-y-auto
-                    [unicode-bidi:plaintext] scrollbar-hide"
+                    [unicode-bidi:plaintext] scrollbar-hide wrap-anywhere"
           />
         </div>
         <Button
