@@ -139,16 +139,14 @@ export function ChatView({
   const { mutate: sendMessageMutate } = useMutation({
     mutationFn: async ({
       content,
-      senderId,
       convId,
       replyToId,
     }: {
       content: string;
-      senderId: string;
       convId: string;
       replyToId?: string | null;
     }) => {
-      const { error } = await sendMessage(content, senderId, convId, replyToId);
+      const { error } = await sendMessage(content, convId, replyToId);
       if (error) throw new Error("Failed to send");
     },
 
@@ -231,7 +229,6 @@ export function ChatView({
     );
     sendMessageMutate({
       content: failedMessage.content,
-      senderId: failedMessage.sender_id,
       convId: failedMessage.conversation_id,
     });
   };
@@ -438,7 +435,6 @@ export function ChatView({
             if (currentUserId && conversationId) {
               sendMessageMutate({
                 content,
-                senderId: currentUserId,
                 convId: conversationId,
                 replyToId: replyTo?.id ?? null,
               });
