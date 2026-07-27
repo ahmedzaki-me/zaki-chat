@@ -1,38 +1,24 @@
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner"
 
-// export const sendMessage = async (
-//   message: string,
-//   senderId: string | undefined,
-//   conversationId: string | undefined,
-//     replyToId?: string | null,
-// ) => {
-//   const { data, error } = await supabase
-//     .from("messages")
-//     .insert([
-//       {
-//         content: message,
-//         sender_id: senderId,
-//         conversation_id: conversationId,
-//             reply_to_id: replyToId ?? null,
-//       },
-//     ])
-//     .select();
-//   return { data, error };
-// };
-
 export const sendMessage = async (
   message: string,
+  senderId: string | undefined,
   conversationId: string | undefined,
-  replyToId?: string | null,
+    replyToId?: string | null,
 ) => {
-  return await supabase.functions.invoke("send-message", {
-    body: {
-      content: message,
-      conversationId,
-      replyToId: replyToId ?? null,
-    },
-  });
+  const { data, error } = await supabase
+    .from("messages")
+    .insert([
+      {
+        content: message,
+        sender_id: senderId,
+        conversation_id: conversationId,
+            reply_to_id: replyToId ?? null,
+      },
+    ])
+    .select();
+  return { data, error };
 };
 
 export const deleteMessage = async (id: string) => {
