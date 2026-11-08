@@ -1,10 +1,10 @@
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/features/auth/hooks/useAuth";
 import { Navigate, Outlet } from "react-router";
-import { FullPageSpinner } from "@/components/FullPageSpinner";
+import { FullPageSpinner } from "@/shared/components/feedback/FullPageSpinner";
 export const AuthLayout = () => {
-  const { user, loading } = useAuth();
+  const { user, isLoading } = useAuth();
 
-  if (loading) return <FullPageSpinner />;
+  if (isLoading) return <FullPageSpinner />;
   if (user) return <Navigate to="/" replace />;
 
   return <Outlet />;

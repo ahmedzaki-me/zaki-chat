@@ -1,31 +1,18 @@
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/features/auth/hooks/useAuth";
 import { Navigate, Outlet } from "react-router";
-import { FullPageSpinner } from "@/components/FullPageSpinner";
+import { FullPageSpinner } from "@/shared/components/feedback/FullPageSpinner";
 
-import { useConversationsRealtime } from "@/hooks/useConversationsRealtime";
-import { useProfilesRealtime } from "@/hooks/useProfilesRealtime";
-
-import { UsersStatusProvider } from "@/context/UsersStatusProvider";
-import { useOneSignal } from "@/hooks/useOneSignal";
 
 export const OwnerLayout = () => {
-  const { user, role, loading } = useAuth();
-  
-  if (loading) return <FullPageSpinner />;
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) return <FullPageSpinner />;
   if (!user) return <Navigate to="/auth/login" replace />;
-  if (role !== "owner") return <Navigate to="/chat-with-zaki" replace />;
+  if (user.role !== "owner") return <Navigate to="/chat-with-zaki" replace />;
 
   return <OwnerLayoutInner />;
 };
 
 const OwnerLayoutInner = () => {
-  useConversationsRealtime();
-  useProfilesRealtime();
-  useOneSignal();
-
-  return (
-    <UsersStatusProvider>
-      <Outlet />
-    </UsersStatusProvider>
-  );
+  return <Outlet />;
 };

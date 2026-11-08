@@ -1,15 +1,15 @@
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/features/auth/hooks/useAuth";
 import { Navigate } from "react-router";
-import { FullPageSpinner } from "@/components/FullPageSpinner";
+import { FullPageSpinner } from "@/shared/components/feedback/FullPageSpinner";
 
 const RootRedirect = () => {
-  const { user, role, loading } = useAuth();
+  const { user, isLoading } = useAuth();
 
-  if (loading) return <FullPageSpinner />;
+  if (isLoading) return <FullPageSpinner />;
   if (!user) return <Navigate to="/auth/login" replace />;
   return (
     <Navigate
-      to={role === "owner" ? "/owner/conversations" : "/chat-with-zaki"}
+      to={user.role === "owner" ? "/owner" : "/chat-with-zaki"}
       replace
     />
   );
