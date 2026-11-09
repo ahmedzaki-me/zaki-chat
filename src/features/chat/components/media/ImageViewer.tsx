@@ -1,4 +1,4 @@
-import { useEffect, type RefObject } from "react";
+import { useCallback, useEffect, type RefObject } from "react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import {
   animate,
@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from "@/shared/components/ui/dialog";
 import { retainMediaObjectUrl } from "@/features/chat/hooks/useCachedMedia";
+import { useHistoryModal } from "@/shared/hooks/useHistoryModal";
 
 type ImageViewerProps = {
   open: boolean;
@@ -45,7 +46,10 @@ export function ImageViewer({
     return retainMediaObjectUrl(src);
   }, [open, src]);
 
-  const close = () => onOpenChange(false);
+  const close = useCallback(() => onOpenChange(false), [onOpenChange]);
+
+  // Support mobile hardware/gesture back button to close the viewer without navigating away
+  useHistoryModal(open, close, "image-viewer");
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

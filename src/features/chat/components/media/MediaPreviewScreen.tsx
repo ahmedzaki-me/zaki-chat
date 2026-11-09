@@ -8,6 +8,7 @@ import { formatFileSize } from "@/features/chat/utils/media.constants";
 import type { Message } from "@/features/chat/types/chat.types";
 import { formatDuration as formatVoiceTime } from "@/shared/lib/date";
 import { canUseChatConnection } from "@/shared/lib/offlineGuard";
+import { useHistoryModal } from "@/shared/hooks/useHistoryModal";
 
 type Props = {
   file: File;
@@ -27,6 +28,9 @@ export function MediaPreviewScreen({
   const previewUrl = useMemo(() => URL.createObjectURL(file), [file]);
   const [previewLoaded, setPreviewLoaded] = useState(false);
   const isVideo = file.type.startsWith("video/");
+
+  // Support mobile back button to cancel media preview instead of exiting chat
+  useHistoryModal(true, onCancel, "media-preview");
 
   useEffect(() => () => URL.revokeObjectURL(previewUrl), [previewUrl]);
   return (

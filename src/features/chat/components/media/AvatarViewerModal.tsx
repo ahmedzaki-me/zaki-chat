@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
 import { UserAvatar } from "@/shared/components/UserAvatar";
+import { useHistoryModal } from "@/shared/hooks/useHistoryModal";
 
 interface AvatarViewerModalProps {
   isOpen: boolean;
@@ -18,6 +19,9 @@ export function AvatarViewerModal({
   name,
   layoutId,
 }: AvatarViewerModalProps) {
+  // Support mobile hardware/gesture back button to close the modal
+  useHistoryModal(isOpen, onClose, "avatar-viewer");
+
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {

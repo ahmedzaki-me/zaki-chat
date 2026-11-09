@@ -28,6 +28,7 @@ import {
 } from "@/shared/components/ui/dialog";
 import { cn } from "@/shared/lib/utils";
 import { retainMediaObjectUrl } from "@/features/chat/hooks/useCachedMedia";
+import { useHistoryModal } from "@/shared/hooks/useHistoryModal";
 
 type VideoViewerProps = {
   open: boolean;
@@ -153,9 +154,13 @@ export function VideoViewer({
         video?.webkitEnterFullscreen?.();
         return;
       }
-      if (touch && video && video.videoWidth > video.videoHeight) {
+      if (touch && video) {
         try {
-          await (screen as OrientationScreen).orientation?.lock?.("landscape");
+          if (video.videoWidth > video.videoHeight) {
+            await (screen as OrientationScreen).orientation?.lock?.("landscape");
+          } else {
+            await (screen as OrientationScreen).orientation?.lock?.("portrait");
+          }
         } catch {
           /* unsupported */
         }
@@ -164,11 +169,25 @@ export function VideoViewer({
       /* Fullscreen is unavailable in this browser context. */
     }
   }, [touch]);
+
+  // Handle mobile back button without exiting the chat
+  useHistoryModal(
+    open,
+    () => {
+      if (fullscreen) {
+        void toggleFullscreen();
+      } else {
+        onOpenChange(false);
+      }
+    },
+    "video-viewer",
+  );
+
   const showControls = useCallback(() => {
     setControlsVisible(true);
     if (timerRef.current) clearTimeout(timerRef.current);
     if (playing && !speedOpen && !dragging)
-      timerRef.current = setTimeout(() => setControlsVisible(false), 2800);
+      timerRef.current = setTimeout(() => setControlsVisible(false), 5000);
   }, [playing, speedOpen, dragging]);
   useEffect(() => {
     const cleanupUrl = retainMediaObjectUrl(src);
@@ -286,10 +305,9 @@ export function VideoViewer({
   useEffect(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
     if (!speedOpen && playing)
-      timerRef.current = setTimeout(() => setControlsVisible(false), 2800);
+      timerRef.current = setTimeout(() => setControlsVisible(false), 5000);
   }, [speedOpen, playing]);
   const handleTouch = (event: React.TouchEvent<HTMLDivElement>) => {
-    showControls();
     const t = event.changedTouches[0];
     const now = Date.now();
     const previous = tapRef.current;
@@ -299,7 +317,10 @@ export function VideoViewer({
       Math.abs(t.clientX - previous.x) < 70 &&
       Math.abs(t.clientY - previous.y) < 70
     ) {
-      if (tapTimer.current) clearTimeout(tapTimer.current);
+      if (tapTimer.current) {
+        clearTimeout(tapTimer.current);
+        tapTimer.current = null;
+      }
       const rect = containerRef.current?.getBoundingClientRect();
       if (!rect) return;
       const back = t.clientX < rect.left + rect.width / 2;
@@ -311,17 +332,23 @@ export function VideoViewer({
       if (feedbackTimer.current) clearTimeout(feedbackTimer.current);
       feedbackTimer.current = setTimeout(() => setFeedback(null), 700);
       tapRef.current = null;
+      showControls();
     } else {
       tapRef.current = { time: now, x: t.clientX, y: t.clientY };
+      if (tapTimer.current) clearTimeout(tapTimer.current);
       tapTimer.current = setTimeout(() => {
         setControlsVisible((visible) => {
-          if (!visible && playing)
+          const next = !visible;
+          if (timerRef.current) clearTimeout(timerRef.current);
+          if (next && playing && !speedOpen && !dragging) {
             timerRef.current = setTimeout(
               () => setControlsVisible(false),
-              2800,
+              5000,
             );
-          return !visible;
+          }
+          return next;
         });
+        tapRef.current = null;
       }, 280);
     }
   };
@@ -343,7 +370,10 @@ export function VideoViewer({
           <DialogDescription className="sr-only">{title}</DialogDescription>
           <div
             ref={containerRef}
-            className="relative flex h-full w-full items-center justify-center bg-black"
+            className={cn(
+              "relative flex h-full w-full items-center justify-center bg-black overflow-hidden",
+              fullscreen && "fixed inset-0 h-dvh w-screen max-h-screen max-w-screen z-[100]",
+            )}
             onPointerMove={showControls}
             onTouchStart={handleTouch}
             onClick={(e) => {
@@ -357,7 +387,10 @@ export function VideoViewer({
               playsInline
               preload="metadata"
               aria-label={title}
-              className="max-h-full max-w-full object-contain"
+              className={cn(
+                "max-h-full max-w-full object-contain transition-all duration-150",
+                fullscreen && "h-full w-full max-h-screen max-w-screen object-contain",
+              )}
               onClick={() => {
                 if (!touch) setControlsVisible((v) => !v);
               }}
@@ -401,10 +434,13 @@ export function VideoViewer({
               variant="ghost"
               size="icon"
               aria-label="Close video viewer"
-              onClick={() => onOpenChange(false)}
+              onClick={() => {
+                if (fullscreen) void toggleFullscreen();
+                else onOpenChange(false);
+              }}
               className={cn(
                 "absolute right-3 top-3 z-10 size-11 text-white hover:bg-white/15 hover:text-white",
-                !controlsVisible && playing && "opacity-0",
+                !controlsVisible && playing && "opacity-0 pointer-events-none",
               )}
             >
               <X />
