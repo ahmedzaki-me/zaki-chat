@@ -12,6 +12,112 @@ export const MEDIA_LIMITS = {
   voiceWaveformBars: 48,
 } as const;
 
+export const MEDIA_BUBBLE = {
+  minWidth: 200,
+  maxWidth: 380,
+  maxHeight: 320,
+  defaultAspectRatio: 4 / 3,
+  minDisplayAspectRatio: 4 / 5,
+  maxDisplayAspectRatio: 16 / 9,
+} as const;
+
+export type MediaDimensions = {
+  width?: number;
+  height?: number;
+  aspectRatio: number;
+};
+
+const dimensionCache = new Map<string, MediaDimensions>();
+
+export function getCachedMediaDimensions(
+  key?: string | null,
+): MediaDimensions | null {
+  if (!key) return null;
+  return dimensionCache.get(key) ?? null;
+}
+
+export function setCachedMediaDimensions(
+  key: string,
+  dimensions: MediaDimensions,
+): void {
+  if (key) {
+    dimensionCache.set(key, dimensions);
+  }
+}
+
+export function getMediaBubbleDimensions(
+  aspectRatio?: number | null,
+  naturalWidth?: number | null,
+  naturalHeight?: number | null,
+): {
+  width: number;
+  height: number;
+  clampedAspectRatio: number;
+  naturalAspectRatio: number;
+  aspectRatio: number;
+} {
+  const naturalRatio =
+    aspectRatio && Number.isFinite(aspectRatio) && aspectRatio > 0
+      ? aspectRatio
+      : naturalWidth && naturalHeight && naturalHeight > 0
+        ? naturalWidth / naturalHeight
+        : MEDIA_BUBBLE.defaultAspectRatio;
+
+  const clampedRatio = Math.max(
+    MEDIA_BUBBLE.minDisplayAspectRatio,
+    Math.min(MEDIA_BUBBLE.maxDisplayAspectRatio, naturalRatio),
+  );
+
+  let targetWidth: number;
+  let targetHeight: number;
+
+  if (
+    naturalWidth &&
+    naturalHeight &&
+    naturalWidth > 0 &&
+    naturalHeight > 0 &&
+    naturalWidth < MEDIA_BUBBLE.minWidth
+  ) {
+    // If image is naturally smaller than minWidth (e.g. 64x64 icon):
+    // Clamped to minWidth (200px), height follows clampedRatio
+    targetWidth = MEDIA_BUBBLE.minWidth;
+    targetHeight = Math.min(
+      MEDIA_BUBBLE.maxHeight,
+      Math.max(1, Math.round(targetWidth / clampedRatio)),
+    );
+  } else {
+    // Media computes width and height directly from clampedRatio constrained by maxWidth and maxHeight:
+    // If clampedRatio <= maxWidth / maxHeight (380 / 320 = 1.1875):
+    // Height reaches maxHeight (320px), width = round(320 * clampedRatio)
+    // If clampedRatio > 1.1875:
+    // Width reaches maxWidth (380px), height = round(380 / clampedRatio)
+    if (clampedRatio <= MEDIA_BUBBLE.maxWidth / MEDIA_BUBBLE.maxHeight) {
+      targetHeight = MEDIA_BUBBLE.maxHeight;
+      targetWidth = Math.round(targetHeight * clampedRatio);
+    } else {
+      targetWidth = MEDIA_BUBBLE.maxWidth;
+      targetHeight = Math.round(targetWidth / clampedRatio);
+    }
+  }
+
+  const width = Math.max(
+    MEDIA_BUBBLE.minWidth,
+    Math.min(MEDIA_BUBBLE.maxWidth, targetWidth),
+  );
+  const height = Math.min(
+    MEDIA_BUBBLE.maxHeight,
+    Math.max(1, targetHeight),
+  );
+
+  return {
+    width,
+    height,
+    clampedAspectRatio: clampedRatio,
+    naturalAspectRatio: naturalRatio,
+    aspectRatio: clampedRatio,
+  };
+}
+
 export function validateMediaFile(file: File): string | null {
   if (file.type === MEDIA_LIMITS.animatedImageType) {
     return file.size <= MEDIA_LIMITS.gifMaxSizeBytes

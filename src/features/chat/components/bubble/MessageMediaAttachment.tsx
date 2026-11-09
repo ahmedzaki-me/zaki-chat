@@ -13,7 +13,13 @@ import { Badge } from "@/shared/components/ui/badge";
 import { Card } from "@/shared/components/ui/card";
 import { Progress } from "@/shared/components/ui/progress";
 import { Skeleton } from "@/shared/components/ui/skeleton";
-import { formatFileSize } from "@/features/chat/utils/media.constants";
+import {
+  formatFileSize,
+  MEDIA_BUBBLE,
+  getMediaBubbleDimensions,
+  getCachedMediaDimensions,
+  setCachedMediaDimensions,
+} from "@/features/chat/utils/media.constants";
 import { useCachedMedia } from "@/features/chat/hooks/useCachedMedia";
 import * as mediaCacheService from "@/features/chat/cache/mediaCache";
 import { useOnlineStatus } from "@/shared/hooks/useOnlineStatus";
@@ -29,14 +35,12 @@ interface MessageMediaAttachmentProps {
   message: Message;
   pendingMessage?: PendingMessage;
   onMediaLoadError?: () => void;
-  onMediaDimensions?: (width: number) => void;
 }
 
 export function MessageMediaAttachment({
   message,
   pendingMessage,
   onMediaLoadError,
-  onMediaDimensions,
 }: MessageMediaAttachmentProps) {
   const reducedMotion = useReducedMotion();
   const imageRef = useRef<HTMLImageElement>(null);
@@ -47,11 +51,6 @@ export function MessageMediaAttachment({
     open: boolean;
   } | null>(null);
   const [videoViewerOpen, setVideoViewerOpen] = useState(false);
-
-  const cachedMeta = mediaCacheService.getMemory(message.id);
-  const [imageAspectRatio, setImageAspectRatio] = useState<number | null>(
-    () => cachedMeta?.aspectRatio ?? null,
-  );
 
   const mediaCache = useCachedMedia(
     message.id,
@@ -76,6 +75,36 @@ export function MessageMediaAttachment({
   const resolvedMediaUrl = isLocalUpload
     ? mediaUrl
     : (mediaCache.objectUrl ?? lastPreviewUrlRef.current ?? mediaCache.fallbackUrl);
+
+  const cachedMeta = mediaCacheService.getMemory(message.id);
+  const [mediaDimensions, setMediaDimensions] = useState<{
+    width?: number;
+    height?: number;
+    aspectRatio: number;
+  }>(() => {
+    const cached =
+      getCachedMediaDimensions(message.id) ??
+      (resolvedMediaUrl ? getCachedMediaDimensions(resolvedMediaUrl) : null) ??
+      (pendingMessage?.clientId
+        ? getCachedMediaDimensions(pendingMessage.clientId)
+        : null);
+    if (cached) return cached;
+    if (cachedMeta) {
+      return {
+        width: cachedMeta.width,
+        height: cachedMeta.height,
+        aspectRatio:
+          cachedMeta.aspectRatio ??
+          (cachedMeta.width && cachedMeta.height
+            ? cachedMeta.width / cachedMeta.height
+            : MEDIA_BUBBLE.defaultAspectRatio),
+      };
+    }
+    return {
+      aspectRatio: MEDIA_BUBBLE.defaultAspectRatio,
+    };
+  });
+
   const shouldLoadMedia =
     isLocalUpload ||
     mediaCache.hasCachedBlob ||
@@ -92,6 +121,12 @@ export function MessageMediaAttachment({
     if (!resolvedMediaUrl) return;
     setLoadedMediaUrl(resolvedMediaUrl);
   };
+
+  const bubbleDimensions = getMediaBubbleDimensions(
+    mediaDimensions.aspectRatio,
+    mediaDimensions.width,
+    mediaDimensions.height,
+  );
 
   if (!message.media || message.deletedAt) return null;
 
@@ -116,7 +151,7 @@ export function MessageMediaAttachment({
         {!isLocalUpload && !mediaCache.cacheChecked ? (
           <Card
             size="sm"
-            className="flex-row items-center gap-3 px-3 py-2 text-card-foreground"
+            className="w-[280px] max-w-full flex-row items-center gap-3 px-3 py-2 text-card-foreground"
           >
             <Skeleton className="size-5 shrink-0 rounded" />
             <div className="min-w-0 flex-1 space-y-1">
@@ -125,7 +160,7 @@ export function MessageMediaAttachment({
             </div>
           </Card>
         ) : mediaCache.loading ? (
-          <Card size="sm" className="space-y-2 px-3 py-3 text-card-foreground">
+          <Card size="sm" className="w-[280px] max-w-full space-y-2 px-3 py-3 text-card-foreground">
             <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
               <span>
                 Downloading media
@@ -151,7 +186,7 @@ export function MessageMediaAttachment({
         ) : !networkOnline && !mediaCache.hasCachedBlob && !isLocalUpload ? (
           <Card
             size="sm"
-            className="flex-row items-center justify-between gap-3 px-3 text-card-foreground"
+            className="w-[280px] max-w-full flex-row items-center justify-between gap-3 px-3 text-card-foreground"
           >
             <span className="min-w-0 text-sm text-muted-foreground">
               {message.media.originalName}
@@ -169,7 +204,7 @@ export function MessageMediaAttachment({
         ) : mediaCache.error || (mediaLoadFailed && shouldLoadMedia) ? (
           <Card
             size="sm"
-            className="flex-row items-center justify-between gap-3 px-3 text-card-foreground"
+            className="w-[280px] max-w-full flex-row items-center justify-between gap-3 px-3 text-card-foreground"
           >
             <span className="min-w-0 text-sm text-muted-foreground">
               {mediaCache.error ?? "Could not load this media."}
@@ -191,7 +226,7 @@ export function MessageMediaAttachment({
         ) : !isLocalUpload && !shouldLoadMedia ? (
           <Card
             size="sm"
-            className="flex-row items-center gap-3 px-3 text-card-foreground"
+            className="w-[280px] max-w-full flex-row items-center gap-3 px-3 text-card-foreground"
           >
             {message.media.kind === "video" ? (
               <Video className="size-5 shrink-0 text-muted-foreground" />
@@ -233,7 +268,14 @@ export function MessageMediaAttachment({
             </Button>
           </Card>
         ) : (
-          <div className="relative w-fit max-w-full">
+          <div
+            className="relative flex items-center justify-center overflow-hidden rounded-lg"
+            style={{
+              width: `${bubbleDimensions.width}px`,
+              maxWidth: "100%",
+              aspectRatio: `${bubbleDimensions.width} / ${bubbleDimensions.height}`,
+            }}
+          >
             {(mediaLoading || !resolvedMediaUrl) && (
               <Skeleton className="absolute inset-0 rounded-lg" />
             )}
@@ -244,10 +286,19 @@ export function MessageMediaAttachment({
                   src={resolvedMediaUrl}
                   title={message.media.originalName ?? "Video"}
                   onClick={() => setVideoViewerOpen(true)}
-                  onLoadedMetadata={() => {
+                  onLoadedMetadata={(_duration, videoWidth, videoHeight) => {
                     markMediaLoaded();
-                    if (videoRef.current?.clientWidth) {
-                      onMediaDimensions?.(videoRef.current.clientWidth);
+                    if (videoWidth && videoHeight) {
+                      const nextDimensions = {
+                        width: videoWidth,
+                        height: videoHeight,
+                        aspectRatio: videoWidth / videoHeight,
+                      };
+                      setMediaDimensions(nextDimensions);
+                      setCachedMediaDimensions(message.id, nextDimensions);
+                      if (resolvedMediaUrl) {
+                        setCachedMediaDimensions(resolvedMediaUrl, nextDimensions);
+                      }
                     }
                   }}
                   onError={() => {
@@ -255,7 +306,7 @@ export function MessageMediaAttachment({
                     if (!isLocalUpload) onMediaLoadError?.();
                   }}
                   messageId={message.id}
-                  initialAspectRatio={cachedMeta?.aspectRatio}
+                  initialAspectRatio={mediaDimensions.aspectRatio}
                 />
               ) : (
                 <motion.img
@@ -298,28 +349,28 @@ export function MessageMediaAttachment({
                     if (target.naturalWidth && target.naturalHeight) {
                       const nextAspectRatio =
                         target.naturalWidth / target.naturalHeight;
-                      setImageAspectRatio(nextAspectRatio);
+                      const nextDimensions = {
+                        width: target.naturalWidth,
+                        height: target.naturalHeight,
+                        aspectRatio: nextAspectRatio,
+                      };
+                      setMediaDimensions(nextDimensions);
+                      setCachedMediaDimensions(message.id, nextDimensions);
+                      if (resolvedMediaUrl) {
+                        setCachedMediaDimensions(resolvedMediaUrl, nextDimensions);
+                      }
                       void mediaCacheService.updateMetadata(message.id, {
                         aspectRatio: nextAspectRatio,
                         width: target.naturalWidth,
                         height: target.naturalHeight,
                       });
                     }
-                    if (target.clientWidth) {
-                      onMediaDimensions?.(target.clientWidth);
-                    }
                   }}
                   onError={() => {
                     setFailedMediaUrl(mediaUrl ?? null);
                     if (!isLocalUpload) onMediaLoadError?.();
                   }}
-                  style={{
-                    aspectRatio:
-                      imageAspectRatio && Number.isFinite(imageAspectRatio)
-                        ? `${imageAspectRatio}`
-                        : undefined,
-                  }}
-                  className="max-h-72 w-auto max-w-full cursor-pointer rounded-lg object-contain"
+                  className="h-full w-full cursor-pointer rounded-lg object-cover"
                 />
               ))}
           </div>
@@ -338,6 +389,7 @@ export function MessageMediaAttachment({
             setImageViewer((current) => (current ? { ...current, open } : null))
           }
           onCloseAutoFocus={() => setImageViewer(null)}
+          aspectRatio={mediaDimensions.aspectRatio}
         />
       )}
 

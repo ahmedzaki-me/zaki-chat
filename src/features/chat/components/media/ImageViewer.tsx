@@ -26,6 +26,7 @@ type ImageViewerProps = {
   triggerRef: RefObject<HTMLImageElement | null>;
   onOpenChange: (open: boolean) => void;
   onCloseAutoFocus: () => void;
+  aspectRatio?: number | null;
 };
 
 export function ImageViewer({
@@ -37,6 +38,7 @@ export function ImageViewer({
   triggerRef,
   onOpenChange,
   onCloseAutoFocus,
+  aspectRatio,
 }: ImageViewerProps) {
   const reducedMotion = useReducedMotion();
   const y = useMotionValue(0);
@@ -103,7 +105,13 @@ export function ImageViewer({
               drag="y"
               dragMomentum={false}
               dragElastic={0.72}
-              style={{ y }}
+              style={{
+                y,
+                aspectRatio:
+                  aspectRatio && Number.isFinite(aspectRatio)
+                    ? `${aspectRatio}`
+                    : undefined,
+              }}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={
@@ -120,7 +128,7 @@ export function ImageViewer({
                     damping: 30,
                   });
               }}
-              className="max-h-[calc(100dvh-10rem)] w-full max-w-full touch-pan-x rounded-sm object-contain sm:max-h-[calc(100dvh-11rem)]"
+              className="max-h-[calc(100dvh-10rem)] w-auto max-w-full touch-pan-x rounded-sm object-contain sm:max-h-[calc(100dvh-11rem)]"
             />
             <div className="max-w-full text-center text-xs text-white/75">
               {caption && (

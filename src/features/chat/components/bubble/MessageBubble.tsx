@@ -1,4 +1,4 @@
-import { memo, useCallback, useState } from "react";
+import { memo, useCallback } from "react";
 import { toast } from "sonner";
 import { AlertCircle, Ban, Reply } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
@@ -9,7 +9,6 @@ import {
 } from "@/features/chat/utils/chat.utils";
 import { formatTime } from "@/shared/lib/date";
 import { useAuth } from "@/features/auth/hooks/useAuth";
-import * as mediaCacheService from "@/features/chat/cache/mediaCache";
 
 import { motion, useMotionValue, useTransform, animate } from "framer-motion";
 
@@ -48,23 +47,6 @@ export interface MessageBubbleProps {
   onCancelUpload?: (item: PendingMessage) => void;
   onDeleteUpload?: (item: PendingMessage) => void;
   showAvatar?: boolean;
-}
-
-function getInitialMediaWidth(
-  meta?: mediaCacheService.MediaCacheMeta | null,
-): number | null {
-  if (!meta) return null;
-  if (meta.width && meta.height) {
-    const maxHeight = 288;
-    if (meta.height > maxHeight) {
-      return Math.round((maxHeight / meta.height) * meta.width);
-    }
-    return meta.width;
-  }
-  if (meta.aspectRatio && Number.isFinite(meta.aspectRatio)) {
-    return Math.round(288 * meta.aspectRatio);
-  }
-  return null;
 }
 
 export const MessageBubble = memo(function MessageBubble({
@@ -113,13 +95,10 @@ export const MessageBubble = memo(function MessageBubble({
   const replyOpacity = useTransform(x, isOwn ? [0, -50] : [0, 50], [0, 1]);
 
   const isVisualMedia =
-    (message.type === "image" || message.type === "video") && !!message.media;
-  const cachedMeta = isVisualMedia
-    ? mediaCacheService.getMemory(message.id)
-    : null;
-  const [renderedMediaWidth, setRenderedMediaWidth] = useState<number | null>(
-    () => (isVisualMedia ? getInitialMediaWidth(cachedMeta) : null),
-  );
+    (message.type === "image" || message.type === "video") &&
+    !!message.media &&
+    message.media.kind !== "voice" &&
+    !message.deletedAt;
 
   return (
     <motion.div
@@ -226,6 +205,7 @@ export const MessageBubble = memo(function MessageBubble({
           className={cn(
             "relative px-2 py-2 max-w-[75%] shadow-sm transition-all",
             "wrap-anywhere rounded-xl backdrop-blur flex flex-col [unicode-bidi:plaintext]",
+            isVisualMedia && "w-fit min-w-[200px]",
             isOwn
               ? "bg-chart-5 text-white/90"
               : "bg-card filter drop-shadow-[0_1px_1px_rgba(0,0,0,0.1)] text-foreground/90",
@@ -242,37 +222,42 @@ export const MessageBubble = memo(function MessageBubble({
           )}
         >
           {message.replyToId && (
-            <MessageReplyQuote
-              replyToId={message.replyToId}
-              repliedMessage={repliedMessage}
-              missingReply={missingReply}
-              repliedSenderName={repliedSenderName}
-              isOwn={isOwn}
-              currentUserId={user?.id}
-              otherName={otherName}
-              onGoToReply={goToReply}
-            />
+            <div
+              className={cn(
+                isVisualMedia && "w-0 min-w-full [contain:inline-size]",
+              )}
+            >
+              <MessageReplyQuote
+                replyToId={message.replyToId}
+                repliedMessage={repliedMessage}
+                missingReply={missingReply}
+                repliedSenderName={repliedSenderName}
+                isOwn={isOwn}
+                currentUserId={user?.id}
+                otherName={otherName}
+                onGoToReply={goToReply}
+              />
+            </div>
           )}
 
           <MessageMediaAttachment
             message={message}
             pendingMessage={pendingMessage}
             onMediaLoadError={handleMediaLoadError}
-            onMediaDimensions={setRenderedMediaWidth}
           />
 
           <div
-            className="flex gap-1.5 flex-wrap justify-between items-center"
-            style={
-              isVisualMedia && renderedMediaWidth && message.text
-                ? {
-                    maxWidth: `${Math.max(180, Math.min(renderedMediaWidth, 420))}px`,
-                    width: "100%",
-                  }
-                : undefined
-            }
+            className={cn(
+              "flex gap-1.5 flex-wrap justify-between items-center",
+              isVisualMedia && "w-0 min-w-full [contain:inline-size]",
+            )}
           >
-            <p className="text-[17px] sm:text-[20px] [unicode-bidi:plaintext] whitespace-pre-wrap break-words">
+            <p
+              className={cn(
+                "text-[17px] sm:text-[20px] [unicode-bidi:plaintext] whitespace-pre-wrap break-words min-w-0",
+                isVisualMedia && message.text && "w-full",
+              )}
+            >
               {message.deletedAt ? (
                 <span className="opacity-60 italic">
                   <Ban className="w-4.5 h-4.5 inline mb-0.5 text-red-600 dark:text-red-700" />{" "}
@@ -287,7 +272,7 @@ export const MessageBubble = memo(function MessageBubble({
 
             <div
               className={cn(
-                "flex items-end gap-1 mt-1.5 justify-self-start ml-auto [unicode-bidi:plaintext]",
+                "flex items-end gap-1 mt-1.5 [unicode-bidi:plaintext] ms-auto",
                 isOwn ? "justify-end" : "justify-start",
               )}
             >
@@ -328,22 +313,36 @@ export const MessageBubble = memo(function MessageBubble({
             </div>
           </div>
 
-          <MessageUploadProgress
-            pendingMessage={pendingMessage}
-            onRetry={onRetry}
-            onCancelUpload={onCancelUpload}
-            onDeleteUpload={onDeleteUpload}
-          />
+          {pendingMessage?.upload && (
+            <div
+              className={cn(
+                isVisualMedia && "w-0 min-w-full [contain:inline-size]",
+              )}
+            >
+              <MessageUploadProgress
+                pendingMessage={pendingMessage}
+                onRetry={onRetry}
+                onCancelUpload={onCancelUpload}
+                onDeleteUpload={onDeleteUpload}
+              />
+            </div>
+          )}
 
           {!message.deletedAt && !isSending && !isError && (
-            <MessageReactions
-              reactions={message.reactions}
-              messageId={message.id}
-              currentUserId={user?.id}
-              isOwner={user?.role === "owner"}
-              otherName={otherName}
-              onReact={onReact}
-            />
+            <div
+              className={cn(
+                isVisualMedia && "w-0 min-w-full [contain:inline-size]",
+              )}
+            >
+              <MessageReactions
+                reactions={message.reactions}
+                messageId={message.id}
+                currentUserId={user?.id}
+                isOwner={user?.role === "owner"}
+                otherName={otherName}
+                onReact={onReact}
+              />
+            </div>
           )}
         </MessageActions>
       </div>

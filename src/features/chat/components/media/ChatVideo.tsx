@@ -1,3 +1,6 @@
+import {
+  setCachedMediaDimensions,
+} from "@/features/chat/utils/media.constants";
 import { formatDuration as formatTime } from "@/shared/lib/date";
 import {
   useCallback,
@@ -659,7 +662,7 @@ type ChatVideoThumbnailProps = {
   src: string;
   title: string;
   onError: () => void;
-  onLoadedMetadata: (duration: number) => void;
+  onLoadedMetadata: (duration: number, width?: number, height?: number) => void;
   onClick: () => void;
   buttonRef: RefObject<HTMLButtonElement | null>;
   messageId?: string;
@@ -685,7 +688,7 @@ export function ChatVideoThumbnail({
       type="button"
       aria-label={`Play video: ${title}`}
       onClick={onClick}
-      className="group relative block max-w-full overflow-hidden rounded-lg text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="group relative block h-full w-full max-w-full overflow-hidden rounded-lg text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <video
         src={`${src}#t=0.1`}
@@ -698,27 +701,38 @@ export function ChatVideoThumbnail({
           if (v.videoWidth && v.videoHeight) {
             const nextRatio = v.videoWidth / v.videoHeight;
             setRatio(nextRatio);
-            if (
-              messageId &&
-              (!initialAspectRatio ||
-                Math.abs(initialAspectRatio - nextRatio) > 0.01)
-            ) {
-              void import("@/features/chat/cache/mediaCache").then(
-                ({ updateMetadata }) => {
-                  void updateMetadata(messageId, {
-                    aspectRatio: nextRatio,
-                    width: v.videoWidth,
-                    height: v.videoHeight,
-                  });
-                },
-              );
+            setCachedMediaDimensions(src, {
+              width: v.videoWidth,
+              height: v.videoHeight,
+              aspectRatio: nextRatio,
+            });
+            if (messageId) {
+              setCachedMediaDimensions(messageId, {
+                width: v.videoWidth,
+                height: v.videoHeight,
+                aspectRatio: nextRatio,
+              });
+              if (
+                !initialAspectRatio ||
+                Math.abs(initialAspectRatio - nextRatio) > 0.01
+              ) {
+                void import("@/features/chat/cache/mediaCache").then(
+                  ({ updateMetadata }) => {
+                    void updateMetadata(messageId, {
+                      aspectRatio: nextRatio,
+                      width: v.videoWidth,
+                      height: v.videoHeight,
+                    });
+                  },
+                );
+              }
             }
           }
           setDuration(v.duration);
-          onLoadedMetadata(v.duration);
+          onLoadedMetadata(v.duration, v.videoWidth, v.videoHeight);
         }}
         onError={onError}
-        className="block h-auto max-h-[360px] w-auto max-w-full rounded-lg object-contain"
+        className="block h-full w-full max-h-[320px] rounded-lg object-cover"
         style={ratio ? { aspectRatio: String(ratio) } : undefined}
       />
       <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
