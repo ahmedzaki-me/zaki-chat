@@ -18,6 +18,7 @@ import {
   usePinMutation,
 } from "@/features/conversations/hooks/useConversations";
 import { useOwnerConversationsRealtime } from "@/features/conversations/hooks/useOwnerConversationsRealtime";
+import { sortConversations } from "@/features/conversations/cache/conversationCache";
 import { ConversationsActions } from "@/features/conversations/components/ConversationsActions";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import {
@@ -56,7 +57,7 @@ function ConversationItem({
       <button
         type="button"
         onClick={onOpen}
-        className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:bg-accent"
+        className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:bg-accent cursor-pointer"
       >
         <UserAvatar
           name={conversation.user.name}
@@ -117,40 +118,59 @@ export default function ConversationsPage() {
 
   const conversations = data?.conversations ?? EMPTY_CONVERSATIONS;
 
+  const totalUnread = useMemo(
+    () => conversations.reduce((acc, c) => acc + (c.unreadCount ?? 0), 0),
+    [conversations],
+  );
+
+  const sortedConversations = useMemo(() => {
+    return sortConversations(conversations);
+  }, [conversations]);
+
   const filtered = useMemo(() => {
-    if (!search.trim()) return conversations;
+    if (!search.trim()) return sortedConversations;
     const term = search.toLowerCase();
-    return conversations.filter(
+    return sortedConversations.filter(
       (c) =>
         c.user.name.toLowerCase().includes(term) ||
         (c.user.username && c.user.username.toLowerCase().includes(term)),
     );
-  }, [conversations, search]);
+  }, [sortedConversations, search]);
 
   return (
     <main className="flex h-dvh flex-col bg-background">
-      <header className="flex items-center justify-between gap-3 border-b bg-card px-4 py-3">
-        <div className="flex items-center gap-2">
-          <MessageSquareText className="size-5 text-primary" />
-          <h1 className="font-semibold text-base">Zaki Chat</h1>
+      {/* ── Header with integrated sleek search bar ── */}
+      <header className="flex flex-col gap-3 border-b bg-card px-4 pt-4 pb-3 shrink-0">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <MessageSquareText className="size-5 text-primary" />
+            <h1 className="font-semibold text-base tracking-tight">Zaki Chat</h1>
+            {totalUnread > 0 && (
+              <Badge
+                variant="secondary"
+                className="h-5 rounded-full px-2 text-[10px] font-bold"
+              >
+                {totalUnread > 99 ? "99+" : totalUnread}
+              </Badge>
+            )}
+          </div>
+          <SettingSheet>
+            <Settings className="size-4" />
+          </SettingSheet>
         </div>
-        <SettingSheet>
-          <Settings className="size-4" />
-        </SettingSheet>
-      </header>
 
-      <div className="border-b px-4 py-2.5">
         <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by name or username"
-            className="pl-8 text-sm"
+            placeholder="Search conversations..."
+            className="pl-9 h-9 bg-muted/50 border-transparent focus-visible:border-input rounded-full text-sm"
           />
         </div>
-      </div>
+      </header>
 
+      {/* ── Conversations List ── */}
       <div className="flex-1 overflow-y-auto divide-y divide-border/60">
         {isLoading ? (
           Array.from({ length: 6 }).map((_, i) => (
@@ -182,6 +202,17 @@ export default function ConversationsPage() {
           ))
         )}
       </div>
+
+      {/* ── Footer with conversation count ── */}
+      <footer className="border-t bg-card/40 px-4 py-2.5 shrink-0">
+        <p className="text-center text-xs text-muted-foreground/70">
+          {conversations.length === 0
+            ? "No conversations"
+            : search.trim()
+              ? `${filtered.length} of ${conversations.length} conversation${conversations.length !== 1 ? "s" : ""}`
+              : `${conversations.length} conversation${conversations.length !== 1 ? "s" : ""}`}
+        </p>
+      </footer>
     </main>
   );
 }
