@@ -104,6 +104,46 @@ export function useCachedMedia(
   const savedAt = useRef<number | null>(initialMemory?.savedAt ?? null);
   const hasMedia = !!media;
 
+  const [prevId, setPrevId] = useState(messageId);
+  const [prevEnabled, setPrevEnabled] = useState(enabled);
+
+  const mem = enabled && media ? mediaCache.getMemory(messageId) : null;
+
+  if (messageId !== prevId || enabled !== prevEnabled) {
+    setPrevId(messageId);
+    setPrevEnabled(enabled);
+
+    if (mem) {
+      savedAt.current = mem.savedAt;
+      activeBlobRef.current = mem.blob;
+      const nextUrl = URL.createObjectURL(mem.blob);
+      setCachedBlob(mem.blob);
+      setObjectUrl(nextUrl);
+      setCacheChecked(true);
+      setDownloadError(null);
+      setFallback(null);
+    } else {
+      savedAt.current = null;
+      activeBlobRef.current = null;
+      setCachedBlob(null);
+      setObjectUrl(null);
+      setCacheChecked(
+        enabled && media ? mediaCache.isCachedSync(messageId) === false : true,
+      );
+      setDownloadError(null);
+      setFallback(null);
+    }
+  } else if (mem && (activeBlobRef.current !== mem.blob || !objectUrl)) {
+    savedAt.current = mem.savedAt;
+    activeBlobRef.current = mem.blob;
+    const nextUrl = URL.createObjectURL(mem.blob);
+    setCachedBlob(mem.blob);
+    setObjectUrl(nextUrl);
+    setCacheChecked(true);
+    setDownloadError(null);
+    setFallback(null);
+  }
+
   useEffect(() => {
     if (!enabled || !hasMedia) {
       setCacheChecked(true);
@@ -113,12 +153,12 @@ export function useCachedMedia(
     let readVersion = 0;
     const read = async () => {
       const currentRead = ++readVersion;
-      const mem = mediaCache.getMemory(messageId);
-      if (mem) {
+      const currentMem = mediaCache.getMemory(messageId);
+      if (currentMem) {
         if (!active || currentRead !== readVersion) return;
-        if (savedAt.current !== mem.savedAt) {
-          savedAt.current = mem.savedAt;
-          setCachedBlob(mem.blob);
+        if (savedAt.current !== currentMem.savedAt) {
+          savedAt.current = currentMem.savedAt;
+          setCachedBlob(currentMem.blob);
         }
         setCacheChecked(true);
         return;
@@ -143,7 +183,7 @@ export function useCachedMedia(
     const syncStatus = mediaCache.isCachedSync(messageId);
     if (syncStatus === false) {
       setCacheChecked(true);
-    } else if (!initialMemory) {
+    } else if (!cachedBlob) {
       void read();
     }
 
@@ -155,7 +195,7 @@ export function useCachedMedia(
       unsubscribe();
       controller.current?.abort();
     };
-  }, [enabled, hasMedia, messageId]);
+  }, [cachedBlob, enabled, hasMedia, messageId]);
 
   useEffect(() => {
     if (!cachedBlob) {

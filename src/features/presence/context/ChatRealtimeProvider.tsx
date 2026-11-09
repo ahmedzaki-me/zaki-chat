@@ -28,6 +28,7 @@ export function PeerTypingProvider({ children }: { children: ReactNode }) {
       window.clearTimeout(timers.get(id));
       timers.delete(id);
       setTyping((old) => {
+        if (!old.has(id)) return old;
         const next = new Set(old);
         next.delete(id);
         return next;
@@ -44,7 +45,7 @@ export function PeerTypingProvider({ children }: { children: ReactNode }) {
         clear(conversationId);
         return;
       }
-      setTyping((old) => new Set(old).add(conversationId));
+      setTyping((old) => (old.has(conversationId) ? old : new Set(old).add(conversationId)));
       window.clearTimeout(timers.get(conversationId));
       timers.set(
         conversationId,
@@ -61,7 +62,7 @@ export function PeerTypingProvider({ children }: { children: ReactNode }) {
     const onDisconnect = () => {
       timers.forEach(window.clearTimeout);
       timers.clear();
-      setTyping(new Set());
+      setTyping((old) => (old.size === 0 ? old : new Set()));
     };
     socket.on("typing", onTyping);
     socket.on("message:new", onNew);
@@ -84,7 +85,15 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
   const [online, setOnline] = useState<Set<string>>(new Set());
   useEffect(() => {
     const onSnapshot = ({ onlineUserIds }: { onlineUserIds: string[] }) =>
-      setOnline(new Set(onlineUserIds));
+      setOnline((old) => {
+        if (
+          old.size === onlineUserIds.length &&
+          onlineUserIds.every((id) => old.has(id))
+        ) {
+          return old;
+        }
+        return new Set(onlineUserIds);
+      });
     const onUpdate = ({
       userId,
       online: isOnline,
@@ -96,6 +105,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     }) => {
       setOnline((old) => {
         const next = new Set(old);
+        if (isOnline ? old.has(userId) : !old.has(userId)) return old;
         if (isOnline) next.add(userId);
         else next.delete(userId);
         return next;
@@ -126,7 +136,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         },
       );
     };
-    const reset = () => setOnline(new Set());
+    const reset = () => setOnline((old) => (old.size === 0 ? old : new Set()));
     if (user?.role !== "owner") {
       reset();
       return;

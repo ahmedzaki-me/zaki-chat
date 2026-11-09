@@ -49,10 +49,11 @@ export function VoiceMessageBubble({
   const { networkOnline } = useOnlineStatus();
   const url = isLocalUpload
     ? localUrl
-    : (cache.objectUrl ?? (networkOnline ? cache.fallbackUrl : null));
+    : (cache.objectUrl ?? localUrl ?? (networkOnline ? cache.fallbackUrl : null));
   const available =
     isLocalUpload ||
     cache.hasCachedBlob ||
+    !!localUrl ||
     (!!cache.fallbackUrl && networkOnline);
   const duration = media.durationSec ?? 0;
   const progress = duration ? Math.min(1, currentTime / duration) : 0;

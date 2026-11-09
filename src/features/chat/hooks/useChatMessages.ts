@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { InfiniteData } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -13,6 +13,7 @@ import { playOutgoingSound } from "@/shared/lib/sounds";
 import { sendMediaMessage, type MediaMessagePayload, interceptPendingMediaMessage } from "@/features/chat/api/mediaMessage.api";
 import { remove as removeCachedMedia } from "@/features/chat/cache/mediaCache";
 import { canUseChatConnection } from "@/shared/lib/offlineGuard";
+import { getClientIdForServerId, linkServerIdToClientId } from "@/features/chat/utils/clientMessageMap";
 
 export function useChatMessages(conversationId: string | undefined, currentUserId: string | undefined) {
   const queryClient = useQueryClient();
@@ -21,17 +22,33 @@ export function useChatMessages(conversationId: string | undefined, currentUserI
   const fetchNextPage = query.fetchNextPage;
   const hasNextPage = query.hasNextPage;
   const [pending, setPending] = useState<PendingMessage[]>([]);
+  const pendingRef = useRef(pending);
+  pendingRef.current = pending;
   const [missingIds, setMissingIds] = useState<Set<string>>(() => new Set());
-  const messages = useMemo(() => {
+  const creationTime = useRef(0);
+
+  const confirmedMessages = useMemo(() => {
     const pagedMessages = query.data?.pages
       .flatMap((page) => page.messages)
       .reverse() ?? [];
     const uniqueMessages = [
       ...new Map(pagedMessages.map((message) => [message.id, message])).values(),
     ];
-    return [...uniqueMessages, ...pending];
-  }, [query.data, pending]);
-  const messagesById = useMemo(() => new Map(messages.map((message) => [message.id, message])), [messages]);
+    return uniqueMessages.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  }, [query.data]);
+
+  const messages = useMemo(() => {
+    return [...confirmedMessages, ...pending];
+  }, [confirmedMessages, pending]);
+
+  const messagesById = useMemo(
+    () => new Map(messages.map((message) => [message.id, message])),
+    [messages],
+  );
+  const messagesByIdRef = useRef(messagesById);
+  messagesByIdRef.current = messagesById;
+  const missingIdsRef = useRef(missingIds);
+  missingIdsRef.current = missingIds;
 
   const updateCache = useCallback((fn: (data: InfiniteData<MessagesResponse> | undefined) => InfiniteData<MessagesResponse> | undefined) => {
     queryClient.setQueryData<InfiniteData<MessagesResponse>>(key, fn);
@@ -44,11 +61,23 @@ export function useChatMessages(conversationId: string | undefined, currentUserI
       return;
     }
     try {
-      const result = await emitWithAck<{ message: Message }>("message:send", { conversationId, text: item.text ?? "", replyToId: item.replyToId ?? null });
+      const result = await emitWithAck<{ message: Message }>("message:send", {
+        conversationId,
+        text: item.text ?? "",
+        replyToId: item.replyToId ?? null,
+      });
+      linkServerIdToClientId(result.message.id, item.clientId);
       setPending((old) => old.filter((message) => message.clientId !== item.clientId));
       updateCache((data) => upsertMessage(data, result.message));
     } catch (error) {
-      setPending((old) => old.map((message) => message.clientId === item.clientId ? { ...message, status: "error" } : message));
+      if (!pendingRef.current.some((message) => message.clientId === item.clientId)) {
+        return;
+      }
+      setPending((old) =>
+        old.map((message) =>
+          message.clientId === item.clientId ? { ...message, status: "error" } : message,
+        ),
+      );
       toast.error(error instanceof Error ? error.message : "Message could not be sent");
     }
   }, [conversationId, updateCache]);
@@ -56,7 +85,23 @@ export function useChatMessages(conversationId: string | undefined, currentUserI
   const send = useCallback((text: string, replyToId?: string | null): boolean => {
     if (!canUseChatConnection(true)) return false;
     const clientId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
-    const item: PendingMessage = { id: `tmp-${clientId}`, clientId, conversationId: conversationId ?? "", senderId: currentUserId ?? "", type: "text", createdAt: new Date().toISOString(), text, media: null, reactions: [], editedAt: null, deletedAt: null, replyToId: replyToId ?? null, status: "sending" };
+    const timestamp = Math.max(Date.now(), creationTime.current + 1);
+    creationTime.current = timestamp;
+    const item: PendingMessage = {
+      id: `tmp-${clientId}`,
+      clientId,
+      conversationId: conversationId ?? "",
+      senderId: currentUserId ?? "",
+      type: "text",
+      createdAt: new Date(timestamp).toISOString(),
+      text,
+      media: null,
+      reactions: [],
+      editedAt: null,
+      deletedAt: null,
+      replyToId: replyToId ?? null,
+      status: "sending",
+    };
     setPending((old) => [...old, item]);
     void playOutgoingSound();
     void transmit(item);
@@ -121,18 +166,18 @@ export function useChatMessages(conversationId: string | undefined, currentUserI
 
   const toggleReaction = useCallback(async (id: string, emoji: string) => {
     if (!canUseChatConnection(true)) return;
-    const message = messagesById.get(id);
+    const message = messagesByIdRef.current.get(id);
     if (!message || message.deletedAt || id.startsWith("tmp-")) return;
     const event = message.reactions.some((reaction) => reaction.userId === currentUserId && reaction.emoji === emoji) ? "reaction:remove" : "reaction:add";
     try {
       const result = await emitWithAck<{ message: Message }>(event, { id, emoji });
       updateCache((data) => patchMessage(data, result.message));
     } catch (error) { toast.error(error instanceof Error ? error.message : "Reaction could not be updated"); }
-  }, [currentUserId, messagesById, updateCache]);
+  }, [currentUserId, updateCache]);
 
   const goToReply = useCallback(async (id: string) => {
-    if (missingIds.has(id)) { toast.error("Message not found or deleted"); return; }
-    let target = messagesById.get(id);
+    if (missingIdsRef.current.has(id)) { toast.error("Message not found or deleted"); return; }
+    let target = messagesByIdRef.current.get(id);
     if (!target && !canUseChatConnection(true)) return;
     while (!target && hasNextPage) {
       const result = await fetchNextPage();
@@ -152,7 +197,7 @@ export function useChatMessages(conversationId: string | undefined, currentUserI
       el.classList.add("highlight-msg");
       window.setTimeout(() => el.classList.remove("highlight-msg"), 2000);
     }));
-  }, [fetchNextPage, hasNextPage, messagesById, missingIds]);
+  }, [fetchNextPage, hasNextPage]);
 
   useEffect(() => {
     if (!conversationId) return;
@@ -161,11 +206,30 @@ export function useChatMessages(conversationId: string | undefined, currentUserI
       if (message.media && interceptPendingMediaMessage(message)) return;
       const cached = queryClient.getQueryData<InfiniteData<MessagesResponse>>(key);
       if (!cached) return;
-      updateCache((data) => data?.pages.some((page) => page.messages.some((item) => item.id === message.id)) ? data : upsertMessage(data, message));
-      if (message.senderId === currentUserId) setPending((old) => {
-        const matchIndex = old.findIndex((item) => item.type === "text" && message.type === "text" && item.status === "sending" && item.text === message.text && (item.replyToId ?? null) === (message.replyToId ?? null));
-        return matchIndex < 0 ? old : old.filter((_, index) => index !== matchIndex);
-      });
+      updateCache((data) => upsertMessage(data, message));
+
+      if (message.senderId === currentUserId) {
+        setPending((old) => {
+          const mappedClientId = getClientIdForServerId(message.id);
+          if (mappedClientId) {
+            return old.filter((item) => item.clientId !== mappedClientId);
+          }
+
+          const matchIndex = old.findIndex(
+            (item) =>
+              item.type === "text" &&
+              message.type === "text" &&
+              item.status === "sending" &&
+              (item.text ?? "") === (message.text ?? "") &&
+              (item.replyToId ?? null) === (message.replyToId ?? null),
+          );
+
+          if (matchIndex < 0) return old;
+          const matchedItem = old[matchIndex];
+          linkServerIdToClientId(message.id, matchedItem.clientId);
+          return old.filter((_, index) => index !== matchIndex);
+        });
+      }
     };
     const onUpdated = ({ message }: { message: Message }) => {
       if (message.conversationId !== conversationId) return;
@@ -198,5 +262,24 @@ export function useChatMessages(conversationId: string | undefined, currentUserI
     return () => { socket.off("message:new", onNew); socket.off("message:updated", onUpdated); socket.off("message:deleted", onDeleted); socket.off("conversation:cleared", onCleared); socket.off("conversation:updated", onConversation); };
   }, [conversationId, currentUserId, key, queryClient, updateCache]);
 
-  return { messages, messagesById, missingIds, goToReply, send, sendMedia, acceptMediaMessage, retry, deleteMessage, editMessage, deletePermanently, toggleReaction, fetchNextPage: query.fetchNextPage, hasNextPage: query.hasNextPage, isFetchingNextPage: query.isFetchingNextPage, isLoading: query.isLoading };
+  return {
+    messages,
+    confirmedMessages,
+    pendingTextMessages: pending,
+    messagesById,
+    missingIds,
+    goToReply,
+    send,
+    sendMedia,
+    acceptMediaMessage,
+    retry,
+    deleteMessage,
+    editMessage,
+    deletePermanently,
+    toggleReaction,
+    fetchNextPage: query.fetchNextPage,
+    hasNextPage: query.hasNextPage,
+    isFetchingNextPage: query.isFetchingNextPage,
+    isLoading: query.isLoading,
+  };
 }

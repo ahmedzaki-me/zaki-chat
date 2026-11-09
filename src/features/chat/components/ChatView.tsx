@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
+import { memo, useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import { Loader2, SendHorizontal } from "lucide-react";
 import { Skeleton } from "@/shared/components/ui/skeleton";
 import { useChatMessages } from "@/features/chat/hooks/useChatMessages";
@@ -18,14 +18,11 @@ import { conversationKeys } from "@/features/conversations/hooks/useConversation
 import { messagesKeys } from "@/features/chat/hooks/useMessagesQuery";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { getCurrentUser } from "@/features/auth/api/auth.service";
-import { MediaPreviewScreen } from "@/features/chat/components/media/MediaPreviewScreen";
-import { validateMediaFile } from "@/features/chat/utils/media.constants";
-import { toast } from "sonner";
 import { usePendingUploads } from "@/features/chat/hooks/usePendingUploads";
 import { OfflineBanner } from "@/shared/components/feedback/OfflineBanner";
-import { canUseChatConnection } from "@/shared/lib/offlineGuard";
 import { useChatScroll } from "@/features/chat/hooks/useChatScroll";
 import { downloadMedia } from "@/features/chat/utils/downloadMedia";
+import { getClientIdForServerId } from "@/features/chat/utils/clientMessageMap";
 
 interface ChatViewProps {
   conversationId?: string;
@@ -42,7 +39,7 @@ interface ChatViewProps {
   peerUser?: { name: string; avatarUrl: string | null };
 }
 
-export function ChatView({
+export const ChatView = memo(function ChatView({
   conversationId,
   currentUserId,
   header,
@@ -73,8 +70,8 @@ export function ChatView({
   );
 
   const {
-    messages: chatMessages,
-    messagesById,
+    confirmedMessages,
+    pendingTextMessages,
     missingIds,
     goToReply,
     send,
@@ -99,19 +96,33 @@ export function ChatView({
   );
   const typing = useTypingEmitter(conversationId);
 
-  const messages = useMemo(
+  const confirmed = useMemo(
+    () => [...confirmedMessages].sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+    [confirmedMessages],
+  );
+
+  const pending = useMemo(
     () =>
-      [...chatMessages, ...pendingUploads.messages].sort((a, b) =>
+      [...pendingTextMessages, ...pendingUploads.messages].sort((a, b) =>
         a.createdAt.localeCompare(b.createdAt),
       ),
-    [chatMessages, pendingUploads.messages],
+    [pendingTextMessages, pendingUploads.messages],
+  );
+
+  const messages = useMemo(
+    () => [...confirmed, ...pending],
+    [confirmed, pending],
+  );
+
+  const messagesById = useMemo(
+    () => new Map(messages.map((message) => [message.id, message])),
+    [messages],
   );
 
   useMarkRead(conversationId, unreadCount, messages, currentUserId);
 
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
-  const [mediaFile, setMediaFile] = useState<File | null>(null);
   const refreshedMediaIds = useRef(new Set<string>());
 
   const groupedMessages = useMemo(
@@ -150,39 +161,102 @@ export function ChatView({
     [conversationId, queryClient],
   );
 
+  const pendingUploadsRef = useRef(pendingUploads);
+  pendingUploadsRef.current = pendingUploads;
+  const retryRef = useRef(retry);
+  retryRef.current = retry;
+  const deleteMessageRef = useRef(deleteMessage);
+  deleteMessageRef.current = deleteMessage;
+  const deletePermanentlyRef = useRef(deletePermanently);
+  deletePermanentlyRef.current = deletePermanently;
+  const toggleReactionRef = useRef(toggleReaction);
+  toggleReactionRef.current = toggleReaction;
+  const handleGoToReplyRef = useRef(handleGoToReply);
+  handleGoToReplyRef.current = handleGoToReply;
+  const authRef = useRef({ accessToken, setAuth });
+  authRef.current = { accessToken, setAuth };
+
+  const handleRetry = useCallback((retryItem: PendingMessage) => {
+    if (retryItem.upload) {
+      pendingUploadsRef.current.retry(retryItem.clientId);
+    } else {
+      retryRef.current(retryItem);
+    }
+  }, []);
+
+  const handleCancelUpload = useCallback((cancelItem: PendingMessage) => {
+    pendingUploadsRef.current.cancel(cancelItem.clientId);
+  }, []);
+
+  const handleDeleteUpload = useCallback((deleteItem: PendingMessage) => {
+    pendingUploadsRef.current.removeFailed(deleteItem.clientId);
+  }, []);
+
+  const handleDeleteMessage = useCallback((id: string) => {
+    void deleteMessageRef.current(id);
+  }, []);
+
+  const handleDeletePermanently = useCallback((id: string) => {
+    void deletePermanentlyRef.current(id);
+  }, []);
+
+  const handleReact = useCallback((id: string, emoji: string) => {
+    void toggleReactionRef.current(id, emoji);
+  }, []);
+
+  const onGoToReply = useCallback((replyToId: string) => {
+    void handleGoToReplyRef.current(replyToId);
+  }, []);
+
+  const handleReply = useCallback((msg: Message) => {
+    setEditingMessage(null);
+    setReplyTo(msg);
+  }, []);
+
+  const handleEdit = useCallback((msg: Message) => {
+    setReplyTo(null);
+    setEditingMessage(msg);
+  }, []);
+
+  const handleAvatarExpired = useCallback(
+    (senderId?: string) => {
+      void queryClient.invalidateQueries({
+        queryKey: conversationKeys.all,
+      });
+      if (senderId === currentUserId)
+        void getCurrentUser()
+          .then(({ user: fresh }) => {
+            if (authRef.current.accessToken)
+              authRef.current.setAuth(authRef.current.accessToken, fresh);
+            queryClient.setQueryData(["auth", "me"], {
+              user: fresh,
+            });
+          })
+          .catch(() => undefined);
+    },
+    [currentUserId, queryClient],
+  );
+
+  const handleMediaLoadError = useCallback(
+    (messageId: string) => {
+      if (refreshedMediaIds.current.has(messageId)) return;
+      refreshedMediaIds.current.add(messageId);
+      void queryClient.invalidateQueries({
+        queryKey: messagesKeys.messages(conversationId ?? ""),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: conversationKeys.all,
+      });
+    },
+    [conversationId, queryClient],
+  );
+
   const activeEditingMessage = editingMessage
     ? (messagesById.get(editingMessage.id) ?? null)
     : null;
   const safeEditingMessage = activeEditingMessage?.deletedAt
     ? null
     : activeEditingMessage;
-
-  const handleMediaFile = useCallback((file: File) => {
-    if (!canUseChatConnection(true)) return;
-    const validationError = validateMediaFile(file);
-    if (validationError) {
-      toast.error(validationError);
-      return;
-    }
-    setMediaFile(file);
-  }, []);
-
-  if (mediaFile && conversationId) {
-    return (
-      <MediaPreviewScreen
-        file={mediaFile}
-        onCancel={() => setMediaFile(null)}
-        onSend={(file, caption) => {
-          if (pendingUploads.start(file, caption, replyTo?.id)) {
-            setMediaFile(null);
-            setReplyTo(null);
-          }
-        }}
-        replyTo={replyTo}
-        onCancelReply={() => setReplyTo(null)}
-      />
-    );
-  }
 
   return (
     <div className="flex flex-col h-dvh bg-muted/10 min-h-0 inset-0">
@@ -247,30 +321,26 @@ export function ChatView({
                     ? (messagesById.get(message.replyToId) ?? null)
                     : null;
 
+                  const messageKey = message.id.startsWith("tmp-")
+                    ? ("clientId" in message ? (message as PendingMessage).clientId : message.id)
+                    : (getClientIdForServerId(message.id) ?? message.id);
+
                   return (
                     <MessageBubble
-                      key={message.id}
+                      key={messageKey}
                       message={message}
                       isOwn={message.senderId === currentUserId}
                       isConsecutive={sameGroup}
                       showAvatar={!sameGroup}
                       pendingMessage={pendingMessage}
-                      onRetry={(retryItem) =>
-                        retryItem.upload
-                          ? pendingUploads.retry(retryItem.clientId)
-                          : retry(retryItem)
-                      }
-                      onCancelUpload={(cancelItem) =>
-                        pendingUploads.cancel(cancelItem.clientId)
-                      }
-                      onDeleteUpload={(deleteItem) =>
-                        pendingUploads.removeFailed(deleteItem.clientId)
-                      }
-                      onDelete={deleteMessage}
-                      onDeletePermanently={deletePermanently}
+                      onRetry={handleRetry}
+                      onCancelUpload={handleCancelUpload}
+                      onDeleteUpload={handleDeleteUpload}
+                      onDelete={handleDeleteMessage}
+                      onDeletePermanently={handleDeletePermanently}
                       canDeletePermanently={isOwner}
-                      onReact={toggleReaction}
-                      goToReply={handleGoToReply}
+                      onReact={handleReact}
+                      goToReply={onGoToReply}
                       missingReply={
                         !!message.replyToId && missingIds.has(message.replyToId)
                       }
@@ -289,39 +359,11 @@ export function ChatView({
                           ? user?.avatarUrl
                           : peerUser?.avatarUrl
                       }
-                      onAvatarExpired={() => {
-                        void queryClient.invalidateQueries({
-                          queryKey: conversationKeys.all,
-                        });
-                        if (message.senderId === currentUserId)
-                          void getCurrentUser()
-                            .then(({ user: fresh }) => {
-                              if (accessToken) setAuth(accessToken, fresh);
-                              queryClient.setQueryData(["auth", "me"], {
-                                user: fresh,
-                              });
-                            })
-                            .catch(() => undefined);
-                      }}
-                      onReply={(msg) => {
-                        setEditingMessage(null);
-                        setReplyTo(msg);
-                      }}
-                      onEdit={(msg) => {
-                        setReplyTo(null);
-                        setEditingMessage(msg);
-                      }}
+                      onAvatarExpired={handleAvatarExpired}
+                      onReply={handleReply}
+                      onEdit={handleEdit}
                       onDownloadMedia={handleDownloadMedia}
-                      onMediaLoadError={() => {
-                        if (refreshedMediaIds.current.has(message.id)) return;
-                        refreshedMediaIds.current.add(message.id);
-                        void queryClient.invalidateQueries({
-                          queryKey: messagesKeys.messages(conversationId ?? ""),
-                        });
-                        void queryClient.invalidateQueries({
-                          queryKey: conversationKeys.all,
-                        });
-                      }}
+                      onMediaLoadError={handleMediaLoadError}
                     />
                   );
                 })}
@@ -347,7 +389,16 @@ export function ChatView({
             }
             return sent;
           }}
-          onMediaSelect={handleMediaFile}
+          onSendMedia={(file, caption) => {
+            if (editingMessage) return false;
+            const sent = pendingUploads.start(file, caption, replyTo?.id);
+            if (sent) {
+              setReplyTo(null);
+              scrollToBottom(true);
+            }
+            return sent;
+          }}
+          chatContainerRef={containerRef}
           onVoiceSend={(recording, replyToId) => {
             if (
               pendingUploads.startVoice(
@@ -378,4 +429,4 @@ export function ChatView({
       </div>
     </div>
   );
-}
+});

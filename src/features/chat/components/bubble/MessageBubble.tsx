@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useCallback, useState } from "react";
 import { toast } from "sonner";
 import { AlertCircle, Ban, Reply } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
@@ -43,8 +43,8 @@ export interface MessageBubbleProps {
   otherName?: string;
   senderName?: string;
   senderAvatarUrl?: string | null;
-  onAvatarExpired?: () => void;
-  onMediaLoadError?: () => void;
+  onAvatarExpired?: (senderId?: string) => void;
+  onMediaLoadError?: (id: string) => void;
   onCancelUpload?: (item: PendingMessage) => void;
   onDeleteUpload?: (item: PendingMessage) => void;
   showAvatar?: boolean;
@@ -67,7 +67,7 @@ function getInitialMediaWidth(
   return null;
 }
 
-export function MessageBubble({
+export const MessageBubble = memo(function MessageBubble({
   message,
   isOwn,
   isConsecutive,
@@ -95,6 +95,14 @@ export function MessageBubble({
   onDeleteUpload,
   showAvatar = true,
 }: MessageBubbleProps) {
+  const handleAvatarExpired = useCallback(() => {
+    onAvatarExpired?.(message.senderId);
+  }, [onAvatarExpired, message.senderId]);
+
+  const handleMediaLoadError = useCallback(() => {
+    onMediaLoadError?.(message.id);
+  }, [onMediaLoadError, message.id]);
+
   const isSending = pendingMessage?.status === "sending";
   const isError = pendingMessage?.status === "error";
   const dragLeft = isOwn ? -60 : 0;
@@ -152,7 +160,7 @@ export function MessageBubble({
               "size-6 shrink-0 translate-y-1",
               isOwn ? "me-1" : "ms-1",
             )}
-            onExpired={onAvatarExpired}
+            onExpired={handleAvatarExpired}
           />
         ) : (
           <span
@@ -249,7 +257,7 @@ export function MessageBubble({
           <MessageMediaAttachment
             message={message}
             pendingMessage={pendingMessage}
-            onMediaLoadError={onMediaLoadError}
+            onMediaLoadError={handleMediaLoadError}
             onMediaDimensions={setRenderedMediaWidth}
           />
 
@@ -341,4 +349,4 @@ export function MessageBubble({
       </div>
     </motion.div>
   );
-}
+});

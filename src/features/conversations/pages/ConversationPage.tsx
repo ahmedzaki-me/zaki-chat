@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import axios from "axios";
 import { useNavigate, useParams } from "react-router";
 import { ArrowLeft } from "lucide-react";
@@ -17,6 +18,42 @@ export const ConversationPage = () => {
 
   const { data, isLoading, isError, error } = useConversation(conversationId);
   const conversation = data?.conversation;
+
+  const peerUser = useMemo(
+    () =>
+      conversation
+        ? {
+            name: conversation.user.name,
+            avatarUrl: conversation.user.avatarUrl,
+          }
+        : undefined,
+    [conversation?.user.name, conversation?.user.avatarUrl],
+  );
+
+  const header = useMemo(
+    () =>
+      conversation ? (
+        <ChatHeader
+          conversationId={conversation.id}
+          name={conversation.user.name}
+          avatarUrl={conversation.user.avatarUrl}
+          username={conversation.user.username}
+          userId={conversation.user.id}
+          lastSeenAt={conversation.user.lastSeenAt}
+          showBack
+          showGuestBadge
+          isLoading={false}
+        />
+      ) : null,
+    [
+      conversation?.id,
+      conversation?.user.id,
+      conversation?.user.name,
+      conversation?.user.avatarUrl,
+      conversation?.user.username,
+      conversation?.user.lastSeenAt,
+    ],
+  );
 
   if (isLoading) {
     return (
@@ -85,20 +122,10 @@ export const ConversationPage = () => {
       conversationId={conversation.id}
       currentUserId={user?.id}
       subtitleDate={conversation.createdAt}
-      header={
-        <ChatHeader
-          conversation={conversation}
-          showBack
-          showGuestBadge
-          isLoading={false}
-        />
-      }
+      header={header}
       introText={`Chat with ${conversation.user.name}`}
       otherName={conversation.user.name}
-      peerUser={{
-        name: conversation.user.name,
-        avatarUrl: conversation.user.avatarUrl,
-      }}
+      peerUser={peerUser}
       peerDeliveredUpTo={conversation.peerDeliveredUpTo}
       peerReadUpTo={conversation.peerReadUpTo}
       unreadCount={conversation.unreadCount}

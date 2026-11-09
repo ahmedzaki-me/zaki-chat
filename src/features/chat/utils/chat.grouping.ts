@@ -1,4 +1,4 @@
-import type { Message } from "@/features/chat/types/chat.types";
+import type { Message, PendingMessage } from "@/features/chat/types/chat.types";
 export interface MessageGroup { date: string; messages: Message[] }
 
 export function isSameMessageGroup(
@@ -10,8 +10,30 @@ export function isSameMessageGroup(
 
 export function groupMessagesByDate(messages: Message[]): MessageGroup[] {
   const groups: MessageGroup[] = [];
+  const today = new Date().toLocaleDateString("en-CA");
+
   for (const message of messages) {
-    const date = message.createdAt ? new Date(message.createdAt).toLocaleDateString("en-CA") : "unknown";
+    const isPending =
+      ("status" in message && Boolean((message as PendingMessage).status)) ||
+      message.id.startsWith("tmp-");
+
+    let date = "unknown";
+    if (message.createdAt) {
+      const parsed = new Date(message.createdAt);
+      if (!Number.isNaN(parsed.getTime())) {
+        date = parsed.toLocaleDateString("en-CA");
+      }
+    }
+
+    if (isPending) {
+      const lastGroup = groups[groups.length - 1];
+      if (lastGroup && lastGroup.date >= today) {
+        date = lastGroup.date;
+      } else {
+        date = today;
+      }
+    }
+
     const group = groups[groups.length - 1];
     if (group?.date === date) group.messages.push(message);
     else groups.push({ date, messages: [message] });

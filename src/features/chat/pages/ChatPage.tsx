@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { ChatView } from "@/features/chat/components/ChatView";
 import { ChatHeader } from "@/features/chat/components/ChatHeader";
@@ -12,6 +13,30 @@ export const ChatPage = () => {
   const { data, isLoading, isError, refetch } = useConversationQuery();
 
   const conversation = data?.conversation;
+
+  const peerUser = useMemo(
+    () => ({
+      name: conversation?.owner?.name ?? "",
+      avatarUrl: conversation?.owner?.avatarUrl ?? "",
+    }),
+    [conversation?.owner?.name, conversation?.owner?.avatarUrl],
+  );
+
+  const header = useMemo(
+    () => (
+      <ChatHeader
+        conversationId={conversation?.id}
+        ownerProfile={conversation?.owner ?? undefined}
+        subtitleFallback="Usually respond in less than a day."
+      />
+    ),
+    [
+      conversation?.id,
+      conversation?.owner?.name,
+      conversation?.owner?.avatarUrl,
+    ],
+  );
+
   if (isError)
     return (
       <div className="grid h-dvh place-content-center gap-4 text-center">
@@ -32,17 +57,8 @@ export const ChatPage = () => {
         unreadCount={conversation?.unreadCount}
         isConversationLoading={isLoading}
         introText="Your private conversation is protected."
-        header={
-          <ChatHeader
-            conversationId={conversation?.id}
-            ownerProfile={conversation?.owner ?? undefined}
-            subtitleFallback="Usually respond in less than a day."
-          />
-        }
-        peerUser={{
-          name: conversation?.owner?.name ?? "",
-          avatarUrl: conversation?.owner?.avatarUrl ?? "",
-        }}
+        header={header}
+        peerUser={peerUser}
       />
 
       {user?.role !== "owner" && user && (

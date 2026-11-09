@@ -66,17 +66,27 @@ export function MessageMediaAttachment({
 
   const mediaUrl = message.media?.url;
   const isLocalUpload = !!pendingMessage?.upload;
+  const lastPreviewUrlRef = useRef<string | null>(null);
+  if (isLocalUpload && mediaUrl) {
+    lastPreviewUrlRef.current = mediaUrl;
+  }
+  if (mediaCache.objectUrl) {
+    lastPreviewUrlRef.current = null;
+  }
   const resolvedMediaUrl = isLocalUpload
     ? mediaUrl
-    : (mediaCache.objectUrl ?? mediaCache.fallbackUrl);
+    : (mediaCache.objectUrl ?? lastPreviewUrlRef.current ?? mediaCache.fallbackUrl);
   const shouldLoadMedia =
-    isLocalUpload || mediaCache.hasCachedBlob || !!mediaCache.fallbackUrl;
+    isLocalUpload ||
+    mediaCache.hasCachedBlob ||
+    !!lastPreviewUrlRef.current ||
+    !!mediaCache.fallbackUrl;
   const mediaLoadFailed = !!mediaUrl && failedMediaUrl === mediaUrl;
   const mediaLoading =
     shouldLoadMedia &&
     !!resolvedMediaUrl &&
     !mediaLoadFailed &&
-    loadedMediaUrl !== resolvedMediaUrl;
+    !loadedMediaUrl;
 
   const markMediaLoaded = () => {
     if (!resolvedMediaUrl) return;

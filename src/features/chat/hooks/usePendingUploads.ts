@@ -1,3 +1,4 @@
+import { linkServerIdToClientId } from "@/features/chat/utils/clientMessageMap";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Message, PendingMessage } from "@/features/chat/types/chat.types";
 import { MEDIA_LIMITS } from "@/features/chat/utils/media.constants";
@@ -69,6 +70,7 @@ export function usePendingUploads(
     if (record.settling) return;
     record.settling = true;
     record.serverMessageId = message.id;
+    linkServerIdToClientId(message.id, record.id);
     if (record.preparedBlob && message.media) {
       await mediaCache.save(message.id, record.preparedBlob, {
         mimeType: message.media.mimeType || record.preparedBlob.type,

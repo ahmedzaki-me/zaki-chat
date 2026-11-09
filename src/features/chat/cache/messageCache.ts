@@ -4,7 +4,7 @@ import type { Message, MessagesResponse } from "@/features/chat/types/chat.types
 export function upsertMessage(data: InfiniteData<MessagesResponse> | undefined, message: Message) {
   if (!data) return data;
   const exists = data.pages.some((page) => page.messages.some((item) => item.id === message.id));
-  if (exists) return { ...data, pages: data.pages.map((page) => ({ ...page, messages: page.messages.map((item) => item.id === message.id ? message : item) })) };
+  if (exists) return data;
   if (!data.pages.length) return data;
   return { ...data, pages: data.pages.map((page, index) => index === 0 ? { ...page, messages: [message, ...page.messages] } : page) };
 }
