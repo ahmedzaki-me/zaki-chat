@@ -29,12 +29,14 @@ interface MessageMediaAttachmentProps {
   message: Message;
   pendingMessage?: PendingMessage;
   onMediaLoadError?: () => void;
+  onMediaDimensions?: (width: number) => void;
 }
 
 export function MessageMediaAttachment({
   message,
   pendingMessage,
   onMediaLoadError,
+  onMediaDimensions,
 }: MessageMediaAttachmentProps) {
   const reducedMotion = useReducedMotion();
   const imageRef = useRef<HTMLImageElement>(null);
@@ -85,7 +87,7 @@ export function MessageMediaAttachment({
 
   if (message.media.kind === "voice") {
     return (
-      <div className="mb-1 w-fit max-w-full overflow-hidden rounded-lg">
+      <div className="mb-1 w-full max-w-full overflow-hidden rounded-lg">
         <VoiceMessageBubble
           messageId={message.id}
           media={message.media}
@@ -232,7 +234,12 @@ export function MessageMediaAttachment({
                   src={resolvedMediaUrl}
                   title={message.media.originalName ?? "Video"}
                   onClick={() => setVideoViewerOpen(true)}
-                  onLoadedMetadata={() => markMediaLoaded()}
+                  onLoadedMetadata={() => {
+                    markMediaLoaded();
+                    if (videoRef.current?.clientWidth) {
+                      onMediaDimensions?.(videoRef.current.clientWidth);
+                    }
+                  }}
                   onError={() => {
                     setFailedMediaUrl(mediaUrl ?? null);
                     if (!isLocalUpload) onMediaLoadError?.();
@@ -284,7 +291,12 @@ export function MessageMediaAttachment({
                       setImageAspectRatio(nextAspectRatio);
                       void mediaCacheService.updateMetadata(message.id, {
                         aspectRatio: nextAspectRatio,
+                        width: target.naturalWidth,
+                        height: target.naturalHeight,
                       });
+                    }
+                    if (target.clientWidth) {
+                      onMediaDimensions?.(target.clientWidth);
                     }
                   }}
                   onError={() => {

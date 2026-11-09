@@ -96,7 +96,7 @@ export function VoiceMessageBubble({
   };
 
   return (
-    <div className="flex min-w-56 max-w-full items-center gap-2 rounded-xl bg-black/35 px-2 py-2">
+    <div className="flex w-full min-w-56 max-w-full items-center gap-2 rounded-xl bg-black/35 px-2 py-2">
       <audio
         key={`${messageId}-${url ?? "empty"}`}
         ref={audioRef}
@@ -216,31 +216,28 @@ export function VoiceMessageBubble({
         </div>
         <div className="mt-0.5 flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
           <span>{formatVoiceTime(playing ? currentTime : duration)}</span>
-          {!available && <span>{formatFileSize(media.size)}</span>}
-          {cache.error && (
-            <span className="truncate text-destructive">{cache.error}</span>
-          )}
-          <span className="flex w-11 shrink-0 justify-end">
-            {showSpeed ? (
+
+          {showSpeed ? (
+            <span className="flex w-11 shrink-0 justify-end">
               <Button
                 type="button"
                 size="xs"
                 variant="secondary"
                 aria-label={`Playback speed ${speed}x`}
                 onClick={cycleSpeed}
-                className="w-11 rounded-full border border-border/70 bg-background/70 px-1.5 font-semibold tabular-nums"
+                className="w-11 rounded-full border border-border/70 bg-background/70 px-1 font-semibold tabular-nums"
               >
                 {speed}x
               </Button>
-            ) : (
-              <span
-                aria-hidden="true"
-                className="invisible inline-flex h-5 w-11"
-              >
-                2x
-              </span>
-            )}
-          </span>
+            </span>
+          ) : (
+            <span className="h-5 w-3"></span>
+          )}
+
+          {!available && <span>{formatFileSize(media.size)}</span>}
+          {cache.error && (
+            <span className="truncate text-destructive">{cache.error}</span>
+          )}
         </div>
       </div>
     </div>

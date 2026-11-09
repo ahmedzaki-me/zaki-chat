@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { toast } from "sonner";
 import { AlertCircle, Ban, Reply } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
@@ -8,6 +9,7 @@ import {
 } from "@/features/chat/utils/chat.utils";
 import { formatTime } from "@/shared/lib/date";
 import { useAuth } from "@/features/auth/hooks/useAuth";
+import * as mediaCacheService from "@/features/chat/cache/mediaCache";
 
 import { motion, useMotionValue, useTransform, animate } from "framer-motion";
 
@@ -48,6 +50,23 @@ export interface MessageBubbleProps {
   showAvatar?: boolean;
 }
 
+function getInitialMediaWidth(
+  meta?: mediaCacheService.MediaCacheMeta | null,
+): number | null {
+  if (!meta) return null;
+  if (meta.width && meta.height) {
+    const maxHeight = 288;
+    if (meta.height > maxHeight) {
+      return Math.round((maxHeight / meta.height) * meta.width);
+    }
+    return meta.width;
+  }
+  if (meta.aspectRatio && Number.isFinite(meta.aspectRatio)) {
+    return Math.round(288 * meta.aspectRatio);
+  }
+  return null;
+}
+
 export function MessageBubble({
   message,
   isOwn,
@@ -84,6 +103,15 @@ export function MessageBubble({
 
   const { user } = useAuth();
   const replyOpacity = useTransform(x, isOwn ? [0, -50] : [0, 50], [0, 1]);
+
+  const isVisualMedia =
+    (message.type === "image" || message.type === "video") && !!message.media;
+  const cachedMeta = isVisualMedia
+    ? mediaCacheService.getMemory(message.id)
+    : null;
+  const [renderedMediaWidth, setRenderedMediaWidth] = useState<number | null>(
+    () => (isVisualMedia ? getInitialMediaWidth(cachedMeta) : null),
+  );
 
   return (
     <motion.div
@@ -222,10 +250,21 @@ export function MessageBubble({
             message={message}
             pendingMessage={pendingMessage}
             onMediaLoadError={onMediaLoadError}
+            onMediaDimensions={setRenderedMediaWidth}
           />
 
-          <div className="flex gap-1.5 flex-wrap justify-between items-center">
-            <p className="text-[16px] [unicode-bidi:plaintext] whitespace-pre-wrap">
+          <div
+            className="flex gap-1.5 flex-wrap justify-between items-center"
+            style={
+              isVisualMedia && renderedMediaWidth && message.text
+                ? {
+                    maxWidth: `${Math.max(180, Math.min(renderedMediaWidth, 420))}px`,
+                    width: "100%",
+                  }
+                : undefined
+            }
+          >
+            <p className="text-[17px] sm:text-[20px] [unicode-bidi:plaintext] whitespace-pre-wrap break-words">
               {message.deletedAt ? (
                 <span className="opacity-60 italic">
                   <Ban className="w-4.5 h-4.5 inline mb-0.5 text-red-600 dark:text-red-700" />{" "}
