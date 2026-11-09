@@ -34,10 +34,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/shared/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/shared/components/ui/dialog";
 import type { Reaction } from "@/features/chat/types/chat.types";
 import type { Message } from "@/features/chat/types/chat.types";
 import { EditHistoryDialog } from "./EditHistoryDialog";
 import { toast } from "sonner";
+import { useHistoryModal } from "@/shared/hooks/useHistoryModal";
 
 interface MessageActionsProps {
   children: ReactNode;
@@ -60,7 +67,6 @@ interface MessageActionsProps {
 
 const quickReactions = [
   "😆",
-  "🙃",
   "🫠",
   "😂",
   "❤️",
@@ -69,8 +75,6 @@ const quickReactions = [
   "😁",
   "😚",
   "🫡",
-  "😶‍🌫️",
-  "🙄",
 ] as const;
 
 const EmojiPickerPanel = lazy(
@@ -103,7 +107,7 @@ const QuickReactions = memo(function QuickReactions({
           <button
             key={emoji}
             type="button"
-            className={`rounded-full border p-1 m-0.5 text-lg hover:bg-accent ${
+            className={`rounded-full border p-1 m-0.5 text-lg hover:bg-accent cursor-pointer ${
               isActive ? "border-primary bg-accent" : "border-transparent"
             }`}
             aria-label={`React ${emoji}`}
@@ -116,7 +120,7 @@ const QuickReactions = memo(function QuickReactions({
       })}
       <button
         type="button"
-        className="rounded-md p-1.5 hover:bg-accent"
+        className="rounded-md p-1.5 hover:bg-accent cursor-pointer flex items-center justify-center"
         aria-label="More reactions"
         onPointerEnter={onPreloadPicker}
         onFocus={onPreloadPicker}
@@ -152,22 +156,33 @@ export function MessageActions({
   className,
 }: MessageActionsProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [pickerOpen, setPickerOpen] = useState(false);
+  const [dialogPickerOpen, setDialogPickerOpen] = useState(false);
   const [menuKey, setMenuKey] = useState(0);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
-  const handleOpenPicker = useCallback(() => setPickerOpen(true), []);
-  const handleBackToReactions = useCallback(() => setPickerOpen(false), []);
+  // Mobile back button closes the reaction picker dialog without leaving the chat
+  useHistoryModal(
+    dialogPickerOpen,
+    () => setDialogPickerOpen(false),
+    "reaction-picker",
+  );
+
+  const handleOpenPicker = useCallback(() => {
+    // Close context menu and open centered responsive dialog
+    setMenuKey((key) => key + 1);
+    setDialogPickerOpen(true);
+  }, []);
+
   const handleEmojiSelect = useCallback(
     (emoji: string) => {
       onReact?.(emoji);
-      setPickerOpen(false);
+      setDialogPickerOpen(false);
       setMenuKey((key) => key + 1);
     },
     [onReact],
   );
-  const handleMenuClose = useCallback(() => setPickerOpen(false), []);
+
   const preloadPicker = useCallback(() => {
     void import("@/features/chat/components/input/EmojiPickerPanel");
   }, []);
@@ -179,35 +194,19 @@ export function MessageActions({
           {children}
         </ContextMenuTrigger>
         <ContextMenuContent
-          onCloseAutoFocus={handleMenuClose}
           side="top"
           avoidCollisions
           collisionPadding={8}
         >
           {canReact && (
             <>
-              {pickerOpen ? (
-                <Suspense
-                  fallback={
-                    <div className="flex h-64 w-72 items-center justify-center text-sm text-muted-foreground">
-                      Loading…
-                    </div>
-                  }
-                >
-                  <EmojiPickerPanel
-                    onBack={handleBackToReactions}
-                    onEmojiSelect={handleEmojiSelect}
-                  />
-                </Suspense>
-              ) : (
-                <QuickReactions
-                  onReact={handleEmojiSelect}
-                  reactions={reactions}
-                  currentUserId={currentUserId}
-                  onOpenPicker={handleOpenPicker}
-                  onPreloadPicker={preloadPicker}
-                />
-              )}
+              <QuickReactions
+                onReact={handleEmojiSelect}
+                reactions={reactions}
+                currentUserId={currentUserId}
+                onOpenPicker={handleOpenPicker}
+                onPreloadPicker={preloadPicker}
+              />
               <ContextMenuSeparator />
             </>
           )}
@@ -282,6 +281,32 @@ export function MessageActions({
           </ContextMenuGroup>
         </ContextMenuContent>
       </ContextMenu>
+
+      {/* ── Responsive Centered Reaction Picker Dialog ── */}
+      <Dialog open={dialogPickerOpen} onOpenChange={setDialogPickerOpen}>
+        <DialogContent
+          showCloseButton={false}
+          className="w-auto max-w-[min(350px,calc(100vw-2rem))] p-0 border-0 bg-transparent shadow-none"
+        >
+          <DialogTitle className="sr-only">Reaction Picker</DialogTitle>
+          <DialogDescription className="sr-only">
+            Choose an emoji reaction
+          </DialogDescription>
+          <Suspense
+            fallback={
+              <div className="flex h-64 w-72 items-center justify-center rounded-xl bg-popover text-sm text-muted-foreground shadow-2xl border">
+                <LoaderCircle className="animate-spin mr-2 size-5" /> Loading emojis…
+              </div>
+            }
+          >
+            <EmojiPickerPanel
+              onBack={() => setDialogPickerOpen(false)}
+              onEmojiSelect={handleEmojiSelect}
+            />
+          </Suspense>
+        </DialogContent>
+      </Dialog>
+
       {historyMessage && (
         <EditHistoryDialog
           message={historyMessage}

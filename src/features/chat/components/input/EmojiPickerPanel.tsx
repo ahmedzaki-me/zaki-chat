@@ -16,7 +16,10 @@ interface EmojiPickerPanelProps {
 }
 
 const EmojiRow = (props: EmojiPickerListRowProps) => (
-  <div {...props} className="grid grid-cols-8 gap-1" />
+  <div
+    {...props}
+    className="grid grid-cols-4 sm:grid-cols-8 gap-1 justify-items-center"
+  />
 );
 
 const EmojiCategoryHeader = ({
@@ -36,7 +39,7 @@ const EmojiButton = ({ emoji, ...props }: EmojiPickerListEmojiProps) => (
     {...props}
     type="button"
     title={emoji.label}
-    className="flex size-8 items-center justify-center rounded-md text-xl hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
+    className="flex size-8 items-center justify-center rounded-md text-xl hover:bg-accent focus-visible:bg-accent focus-visible:outline-none cursor-pointer"
   >
     {emoji.emoji}
   </button>
@@ -66,7 +69,6 @@ function EmojiPickerPanelComponent({
   );
   const handleKeyDown: ComponentProps<"div">["onKeyDown"] = (event) => {
     if (event.key === "Escape") {
-      // Keep Escape inside the context menu while returning to its reaction row.
       event.preventDefault();
       event.stopPropagation();
       onBack();
@@ -80,13 +82,13 @@ function EmojiPickerPanelComponent({
       resolveEmojiData={resolveAllowedEmojiData}
     >
       <div
-        className="max-w-80 rounded-md border bg-popover p-2 text-popover-foreground"
+        className="w-full max-w-[min(340px,calc(100vw-2rem))] rounded-xl border bg-popover p-2 text-popover-foreground shadow-2xl"
         onKeyDown={handleKeyDown}
       >
         <div className="mb-2 flex items-center gap-2">
           <button
             type="button"
-            className="rounded-md p-1.5 hover:bg-accent"
+            className="rounded-md p-1.5 hover:bg-accent cursor-pointer"
             aria-label="Back to quick reactions"
             onClick={onBack}
           >
@@ -97,7 +99,7 @@ function EmojiPickerPanelComponent({
             placeholder="Search emoji…"
             className="min-w-0 flex-1 rounded-md border bg-background px-2 py-1.5 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
           />
-          <EmojiPicker.SkinToneSelector className="rounded-md p-1.5 hover:bg-accent" />
+          <EmojiPicker.SkinToneSelector className="rounded-md p-1.5 hover:bg-accent cursor-pointer" />
         </div>
         <EmojiPicker.Viewport className="h-64 overflow-y-auto">
           <EmojiPicker.Loading className="block py-4 text-center text-sm text-muted-foreground">
