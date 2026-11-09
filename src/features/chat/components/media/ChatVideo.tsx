@@ -5,6 +5,7 @@ import { formatDuration as formatTime } from "@/shared/lib/date";
 import {
   useCallback,
   useEffect,
+  memo,
   useRef,
   useState,
   type RefObject,
@@ -668,7 +669,7 @@ type ChatVideoThumbnailProps = {
   messageId?: string;
   initialAspectRatio?: number;
 };
-export function ChatVideoThumbnail({
+export const ChatVideoThumbnail = memo(function ChatVideoThumbnail({
   src,
   title,
   onError,
@@ -745,4 +746,4 @@ export function ChatVideoThumbnail({
       </span>
     </button>
   );
-}
+});

@@ -23,6 +23,7 @@ let dbPromise: Promise<IDBDatabase | null> | null = null;
 // L1 In-Memory Caches for synchronous O(1) checks & instant rendering
 let cachedKeys: Set<string> | null = null;
 const memoryCache = new Map<string, CachedMedia>();
+const inFlightReads = new Map<string, Promise<CachedMedia | null>>();
 let initPromise: Promise<void> | null = null;
 
 function notifyChange(messageId?: string): void {
@@ -198,22 +199,29 @@ export async function get(messageId: string): Promise<CachedMedia | null> {
     return null;
   }
 
-  try {
-    const record = await requestValue<CachedMedia>("readonly", (store) =>
-      store.get(messageId),
-    );
-    if (record) {
-      cachedKeys?.add(messageId);
-      if (memoryCache.size >= MAX_MEMORY_ITEMS) {
-        const oldestKey = memoryCache.keys().next().value;
-        if (oldestKey) memoryCache.delete(oldestKey);
+  const existingInFlight = inFlightReads.get(messageId);
+  if (existingInFlight) return existingInFlight;
+
+  const readPromise = (async () => {
+    try {
+      const record = await requestValue<CachedMedia>("readonly", (store) =>
+        store.get(messageId),
+      );
+      if (record) {
+        cachedKeys?.add(messageId);
+        // Retain in memoryCache so IndexedDB is read at most once per session per message
+        memoryCache.set(messageId, record);
       }
-      memoryCache.set(messageId, record);
+      return record;
+    } catch {
+      return null;
+    } finally {
+      inFlightReads.delete(messageId);
     }
-    return record;
-  } catch {
-    return null;
-  }
+  })();
+
+  inFlightReads.set(messageId, readPromise);
+  return readPromise;
 }
 
 export async function save(
@@ -227,10 +235,6 @@ export async function save(
     if (!saved) return false;
 
     cachedKeys?.add(messageId);
-    if (memoryCache.size >= MAX_MEMORY_ITEMS) {
-      const oldestKey = memoryCache.keys().next().value;
-      if (oldestKey) memoryCache.delete(oldestKey);
-    }
     memoryCache.set(messageId, item);
 
     notifyChange(messageId);
@@ -255,6 +259,13 @@ export async function updateMetadata(
   try {
     const memoryItem = memoryCache.get(messageId);
     if (memoryItem) {
+      // Check if patch actually changes any existing value to prevent redundant IDB writes
+      const hasChange = Object.entries(patch).some(
+        ([key, val]) =>
+          val !== undefined &&
+          (memoryItem as Record<string, unknown>)[key] !== val,
+      );
+      if (!hasChange) return;
       Object.assign(memoryItem, patch);
     }
     await writeRequest((store) => {
@@ -276,6 +287,7 @@ export async function remove(messageId: string): Promise<void> {
   try {
     cachedKeys?.delete(messageId);
     memoryCache.delete(messageId);
+    inFlightReads.delete(messageId);
     await writeRequest((store) => store.delete(messageId));
     notifyChange(messageId);
   } catch {
@@ -287,6 +299,7 @@ export async function clearAll(): Promise<boolean> {
   try {
     cachedKeys?.clear();
     memoryCache.clear();
+    inFlightReads.clear();
     const cleared = await writeRequest((store) => store.clear());
     if (!cleared) return false;
     notifyChange();

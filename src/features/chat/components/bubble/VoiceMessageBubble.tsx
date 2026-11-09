@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import {
   Download,
   Loader2,
@@ -32,7 +32,7 @@ type Props = {
 
 let activeAudio: HTMLAudioElement | null = null;
 
-export function VoiceMessageBubble({
+export const VoiceMessageBubble = memo(function VoiceMessageBubble({
   messageId,
   media,
   isLocalUpload,
@@ -99,7 +99,7 @@ export function VoiceMessageBubble({
   return (
     <div className="flex w-full min-w-56 max-w-full items-center gap-2 rounded-xl bg-black/35 px-2 py-2">
       <audio
-        key={`${messageId}-${url ?? "empty"}`}
+        key={messageId}
         ref={audioRef}
         src={url ?? undefined}
         preload="metadata"
@@ -243,4 +243,4 @@ export function VoiceMessageBubble({
       </div>
     </div>
   );
-}
+});

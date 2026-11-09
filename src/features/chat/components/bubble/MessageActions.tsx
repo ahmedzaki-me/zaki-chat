@@ -157,7 +157,6 @@ export function MessageActions({
 }: MessageActionsProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogPickerOpen, setDialogPickerOpen] = useState(false);
-  const [menuKey, setMenuKey] = useState(0);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
@@ -168,19 +167,30 @@ export function MessageActions({
     "reaction-picker",
   );
 
-  const handleOpenPicker = useCallback(() => {
-    // Close context menu and open centered responsive dialog
-    setMenuKey((key) => key + 1);
-    setDialogPickerOpen(true);
+  const closeMenu = useCallback(() => {
+    document.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Escape",
+        code: "Escape",
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
   }, []);
+
+  const handleOpenPicker = useCallback(() => {
+    // Close context menu without remounting trigger/children
+    closeMenu();
+    setDialogPickerOpen(true);
+  }, [closeMenu]);
 
   const handleEmojiSelect = useCallback(
     (emoji: string) => {
       onReact?.(emoji);
       setDialogPickerOpen(false);
-      setMenuKey((key) => key + 1);
+      closeMenu();
     },
-    [onReact],
+    [closeMenu, onReact],
   );
 
   const preloadPicker = useCallback(() => {
@@ -189,7 +199,7 @@ export function MessageActions({
 
   return (
     <>
-      <ContextMenu key={menuKey}>
+      <ContextMenu>
         <ContextMenuTrigger className={className}>
           {children}
         </ContextMenuTrigger>
@@ -239,7 +249,7 @@ export function MessageActions({
                     )
                     .finally(() => {
                       setDownloading(false);
-                      setMenuKey((key) => key + 1);
+                      closeMenu();
                     });
                 }}
               >
