@@ -198,8 +198,14 @@ export function useVoiceRecorder(onSend: (recording: VoiceRecording) => void, en
     const dy = event.clientY - pointer.y;
     pointer.dragX = Math.max(-120, Math.min(0, dx));
     if (stateRef.current.status === "recording" && dy <= -75) {
-      setStatus("locked");
       pointerRef.current = null;
+      setState((current) => ({
+        ...current,
+        status: "locked",
+        elapsedMs: elapsedRef.current,
+        dragX: 0,
+        dragY: 0,
+      }));
       return;
     }
     setState((current) => ({ ...current, dragX: pointer.dragX, dragY: Math.min(0, dy) }));

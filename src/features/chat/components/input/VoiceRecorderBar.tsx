@@ -41,7 +41,7 @@ export function VoiceRecorderBar({
     <motion.div
       animate={{ x: locked ? 0 : Math.max(-12, controls.dragX * 0.12) }}
       transition={{ type: "spring", stiffness: 360, damping: 28 }}
-      className={`relative flex items-center ${locked ? "w-full gap-2 rounded-3xl border bg-card/90 px-3 py-2" : active ? "min-w-0 flex-1 gap-3" : ""}`}
+      className={`relative flex items-center ${locked ? "w-full flex-1 min-w-0 gap-2 rounded-3xl border bg-card/90 px-3 py-2" : active ? "min-w-0 flex-1 gap-3" : ""}`}
     >
       <div
         className={`flex min-w-0 items-center gap-2 ${active && !locked ? "flex-1" : "hidden"}`}
@@ -149,7 +149,7 @@ export function VoiceRecorderBar({
       )}
       <div
         key="gesture-button"
-        className={`relative shrink-0 ${locked ? "absolute right-0 top-0 size-0" : ""}`}
+        className={`relative shrink-0 ${locked ? "absolute right-5 top-2 size-0 pointer-events-none" : ""}`}
       >
         <AnimatePresence initial={false}>
           {active && (
@@ -163,7 +163,7 @@ export function VoiceRecorderBar({
               }}
               exit={{ opacity: 0, y: -8, scale: 0.85 }}
               transition={{ type: "spring", stiffness: 420, damping: 22 }}
-              className={`absolute -top-11 left-1/2 flex -translate-x-1/2 flex-col items-center ${locked || lockProgress >= 0.85 ? "text-primary" : "text-muted-foreground"}`}
+              className={`absolute -top-11 left-1/2 flex -translate-x-1/2 flex-col items-center pointer-events-none z-30 ${locked || lockProgress >= 0.85 ? "text-primary" : "text-muted-foreground"}`}
               aria-hidden="true"
             >
               {!locked && (
@@ -179,41 +179,43 @@ export function VoiceRecorderBar({
                 </motion.span>
               )}
               {locked || lockProgress >= 0.85 ? (
-                <Lock className="size-4" />
+                <Lock className="size-4 -translate-y-3" />
               ) : (
                 <LockOpen className="size-4" />
               )}
             </motion.div>
           )}
         </AnimatePresence>
-        <Button
-          type="button"
-          size="icon"
-          variant={
-            cancelArmed ? "destructive" : active ? "destructive" : "outline"
-          }
-          aria-label={
-            active
-              ? cancelArmed
-                ? "Release to cancel recording"
-                : "Recording voice message; release to send"
-              : "Hold to record voice message"
-          }
-          disabled={disabled}
-          onPointerDown={controls.pointerDown}
-          onPointerMove={controls.pointerMove}
-          onPointerUp={controls.pointerUp}
-          onPointerCancel={controls.pointerCancel}
-          onLostPointerCapture={controls.pointerCancel}
-          onContextMenu={(event) => event.preventDefault()}
-          className={`h-11 w-11 touch-none select-none rounded-full ${active ? "animate-pulse" : ""} ${locked ? "invisible" : ""}`}
-        >
-          {cancelArmed ? (
-            <Trash2 className="size-5" />
-          ) : (
-            <Mic className="size-5" />
-          )}
-        </Button>
+        {!locked && (
+          <Button
+            type="button"
+            size="icon"
+            variant={
+              cancelArmed ? "destructive" : active ? "destructive" : "outline"
+            }
+            aria-label={
+              active
+                ? cancelArmed
+                  ? "Release to cancel recording"
+                  : "Recording voice message; release to send"
+                : "Hold to record voice message"
+            }
+            disabled={disabled}
+            onPointerDown={controls.pointerDown}
+            onPointerMove={controls.pointerMove}
+            onPointerUp={controls.pointerUp}
+            onPointerCancel={controls.pointerCancel}
+            onLostPointerCapture={controls.pointerCancel}
+            onContextMenu={(event) => event.preventDefault()}
+            className={`h-11 w-11 touch-none select-none rounded-full ${active ? "animate-pulse" : ""}`}
+          >
+            {cancelArmed ? (
+              <Trash2 className="size-5" />
+            ) : (
+              <Mic className="size-5" />
+            )}
+          </Button>
+        )}
       </div>
     </motion.div>
   );

@@ -259,7 +259,7 @@ export const ChatView = memo(function ChatView({
     : activeEditingMessage;
 
   return (
-    <div className="flex flex-col h-dvh bg-muted/10 min-h-0 inset-0">
+    <div className="flex flex-col h-dvh bg-muted/10 min-h-0 inset-0 overflow-x-clip">
       <div className="shrink-0 z-10">{header}</div>
       <OfflineBanner />
 
