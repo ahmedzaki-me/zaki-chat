@@ -9,6 +9,7 @@ type Props = {
   avatarUrl?: string | null;
   size?: "sm" | "default" | "lg";
   className?: string;
+  fallbackClassName?: string;
   onExpired?: () => void;
   children?: ReactNode;
 };
@@ -18,6 +19,7 @@ export function UserAvatar({
   avatarUrl,
   size = "default",
   className,
+  fallbackClassName,
   onExpired,
   children,
 }: Props) {
@@ -39,7 +41,7 @@ export function UserAvatar({
           }}
         />
       )}
-      <AvatarFallback>{getInitials(name)}</AvatarFallback>
+      <AvatarFallback className={fallbackClassName}>{getInitials(name)}</AvatarFallback>
       {children}
     </Avatar>
   );

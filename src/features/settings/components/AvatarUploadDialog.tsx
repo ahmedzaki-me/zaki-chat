@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/shared/components/ui/button";
 import {
   Dialog,
@@ -134,12 +135,17 @@ export function AvatarUploadDialog({
       if (controller.signal.aborted) return;
       if (accessToken) setAuth(accessToken, updated);
       client.setQueryData(accountKey, { user: updated });
+      await client.invalidateQueries({ queryKey: accountKey });
+
       setPreviewUrl((old) => {
         if (old) URL.revokeObjectURL(old);
         return null;
       });
       setBlob(null);
-      setStage("success");
+      setStage(null);
+      setProgress(0);
+      onOpenChange(false);
+      toast.success("Profile photo updated.");
     } catch (reason) {
       if (!controller.signal.aborted) {
         setStage("error");
@@ -187,7 +193,8 @@ export function AvatarUploadDialog({
             name={name ?? "User"}
             avatarUrl={previewUrl ?? avatarUrl}
             size="lg"
-            className="size-32"
+            className="size-36 shadow-md"
+            fallbackClassName="text-4xl font-semibold"
           />
           <AvatarDropzone
             disabled={busy}
@@ -214,36 +221,22 @@ export function AvatarUploadDialog({
           )}
         </div>
         <DialogFooter className="gap-2 sm:gap-0">
-          {stage === "success" ? (
-            <Button type="button" onClick={cancel}>
-              Done
-            </Button>
-          ) : (
-            <>
-              {busy ? (
-                <Button type="button" variant="outline" onClick={cancel}>
-                  Cancel upload
-                </Button>
-              ) : (
-                <Button type="button" variant="outline" onClick={cancel}>
-                  Cancel
-                </Button>
-              )}
-              <Button
-                type="button"
-                disabled={!blob || busy}
-                onClick={() => void save()}
-              >
-                {stage === "saving" ? (
-                  <>
-                    <Loader2 className="animate-spin" /> Saving…
-                  </>
-                ) : (
-                  "Save photo"
-                )}
-              </Button>
-            </>
-          )}
+          <Button type="button" variant="outline" onClick={cancel}>
+            {busy ? "Cancel upload" : "Cancel"}
+          </Button>
+          <Button
+            type="button"
+            disabled={!blob || busy}
+            onClick={() => void save()}
+          >
+            {stage === "saving" ? (
+              <>
+                <Loader2 className="animate-spin" /> Saving…
+              </>
+            ) : (
+              "Save photo"
+            )}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

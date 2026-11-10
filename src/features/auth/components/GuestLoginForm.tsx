@@ -117,7 +117,7 @@ export function GuestLoginForm({
                 placeholder={placeholder ?? "Your name"}
                 autoComplete="name"
                 autoFocus={autoFocus}
-                className="h-12 text-base sm:h-7 sm:text-sm"
+                className="h-10 text-base sm:h-7 sm:text-sm"
                 {...form.register("name")}
                 error={form.formState.errors.name}
               />
@@ -125,7 +125,7 @@ export function GuestLoginForm({
             <Button
               type="submit"
               disabled={isGuestLoading || isVerifying}
-              className="h-12 w-full shrink-0 px-4 text-white/90 sm:h-7 sm:w-auto"
+              className="h-10 w-full shrink-0 px-4 text-white/90 sm:h-7 sm:w-auto"
             >
               {isVerifying ? (
                 <span className="flex items-center justify-center gap-2">

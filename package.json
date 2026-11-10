@@ -2,6 +2,7 @@
   "name": "Zaki Chat",
   "private": true,
   "version": "2.0.1",
+  "author": "Ahmed Zaki",
   "type": "module",
   "scripts": {
     "dev": "vite",
