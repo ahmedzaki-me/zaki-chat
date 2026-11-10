@@ -1,18 +1,64 @@
 import { createBrowserRouter, redirect } from "react-router";
 import { FullPageSpinner } from "@/shared/components/feedback/FullPageSpinner";
+import { PublicLayout } from "@/layouts/PublicLayout";
 
 export const router = createBrowserRouter([
   {
-    path: "/",
+    element: <PublicLayout />,
     HydrateFallback: FullPageSpinner,
+    children: [
+      {
+        path: "/",
+        HydrateFallback: FullPageSpinner,
 
-    lazy: async () => {
-      const { default: Component } = await import("@/layouts/RootRedirect");
+        lazy: async () => {
+          const { default: Component } = await import(
+            "@/features/landing/pages/LandingPage"
+          );
 
-      return {
-        Component,
-      };
-    },
+          return {
+            Component,
+          };
+        },
+      },
+      {
+        path: "/auth",
+        HydrateFallback: FullPageSpinner,
+
+        lazy: async () => {
+          const { AuthLayout } = await import("@/layouts/AuthLayout");
+
+          return {
+            Component: AuthLayout,
+          };
+        },
+        children: [
+          {
+            index: true,
+            loader: () => redirect("/auth/login"),
+          },
+          {
+            path: "login",
+            lazy: async () => {
+              const { default: Component } = await import(
+                "@/features/auth/pages/LoginPage"
+              );
+
+              return { Component };
+            },
+          },
+          {
+            path: "signup",
+            lazy: async () => {
+              const { default: Component } =
+                await import("@/features/auth/pages/SignupPage");
+
+              return { Component };
+            },
+          },
+        ],
+      },
+    ],
   },
 
   {
@@ -28,42 +74,6 @@ export const router = createBrowserRouter([
         index: true,
         lazy: async () => {
           const { default: Component } = await import("@/features/settings/pages/SettingsPage");
-          return { Component };
-        },
-      },
-    ],
-  },
-
-  {
-    path: "/auth",
-    HydrateFallback: FullPageSpinner,
-
-    lazy: async () => {
-      const { AuthLayout } = await import("@/layouts/AuthLayout");
-
-      return {
-        Component: AuthLayout,
-      };
-    },
-    children: [
-      {
-        index: true,
-        loader: () => redirect("/auth/login"),
-      },
-      {
-        path: "login",
-        lazy: async () => {
-          const { default: Component } = await import("@/features/auth/pages/LoginPage");
-
-          return { Component };
-        },
-      },
-      {
-        path: "signup",
-        lazy: async () => {
-          const { default: Component } =
-            await import("@/features/auth/pages/SignupPage");
-
           return { Component };
         },
       },

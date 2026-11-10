@@ -7,7 +7,7 @@ export default function ModeSwitch() {
 
   return (
     <div className="flex items-center justify-between">
-      <Label>Switch Theme</Label>
+      <Label className="pr-3">Switch Theme</Label>
       <Switch
         id="mode"
         checked={mode === "dark"}

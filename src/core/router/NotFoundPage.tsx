@@ -17,10 +17,10 @@ export default function NotFoundPage() {
       <EmptyHeader>
         <div
           className="mx-auto overflow-hidden mb-6 flex h-16 w-16 items-center
-                        justify-center rounded-2xl bg-primary text-3xl font-bold
-                        text-primary-foreground shadow-xl shadow-primary/20"
+                        justify-center rounded-2xl bg-primary/10 text-3xl font-bold
+                        text-primary shadow-xl shadow-primary/20 p-2.5"
         >
-          <img src="/logo.svg" alt="logo" />
+          <img src="/Small_logo.png" alt="Zaki Chat Logo" className="h-full w-full object-contain" />
         </div>
 
         <EmptyTitle className="text-3xl font-bold tracking-tight">
