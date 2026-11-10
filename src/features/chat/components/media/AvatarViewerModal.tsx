@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
 import { UserAvatar } from "@/shared/components/UserAvatar";
 import { useHistoryModal } from "@/shared/hooks/useHistoryModal";
+import { ImageViewer } from "./ImageViewer";
 
 interface AvatarViewerModalProps {
   isOpen: boolean;
@@ -19,6 +20,44 @@ export function AvatarViewerModal({
   name,
   layoutId,
 }: AvatarViewerModalProps) {
+  if (avatarUrl) {
+    return (
+      <ImageViewer
+        open={isOpen}
+        src={avatarUrl}
+        layoutId={layoutId}
+        title={name}
+        originalName={name}
+        caption={null}
+        variant="avatar"
+        onOpenChange={(open) => {
+          if (!open) onClose();
+        }}
+      />
+    );
+  }
+
+  return (
+    <FallbackAvatarModal
+      isOpen={isOpen}
+      onClose={onClose}
+      name={name}
+      layoutId={layoutId}
+    />
+  );
+}
+
+function FallbackAvatarModal({
+  isOpen,
+  onClose,
+  name,
+  layoutId,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  name: string;
+  layoutId?: string;
+}) {
   // Support mobile hardware/gesture back button to close the modal
   useHistoryModal(isOpen, onClose, "avatar-viewer");
 
@@ -48,27 +87,19 @@ export function AvatarViewerModal({
             className="relative z-10 aspect-square w-full max-w-sm overflow-hidden rounded-2xl bg-card shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
-            {avatarUrl ? (
-              <img
-                src={avatarUrl}
-                alt={`${name}'s avatar`}
-                className="size-full object-cover"
+            <div className="flex size-full items-center justify-center">
+              <UserAvatar
+                name={name}
+                size="lg"
+                className="size-full rounded-none text-6xl"
               />
-            ) : (
-              <div className="flex size-full items-center justify-center">
-                <UserAvatar
-                  name={name}
-                  size="lg"
-                  className="size-full rounded-none text-6xl"
-                />
-              </div>
-            )}
+            </div>
 
             <button
               type="button"
               onClick={onClose}
               aria-label="Close profile photo"
-              className="absolute right-3 top-3 rounded-full bg-black/40 p-2 text-white transition-colors hover:bg-black/60 focus:outline-hidden"
+              className="absolute right-3 top-3 z-10 rounded-full bg-black/40 p-2 text-white transition-colors hover:bg-black/60 focus:outline-hidden"
             >
               <X className="size-5" />
             </button>

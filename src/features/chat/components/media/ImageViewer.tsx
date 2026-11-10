@@ -1,11 +1,10 @@
-import { useCallback, useEffect, type RefObject } from "react";
+import { useCallback, useEffect, useRef, type RefObject } from "react";
 import { Dialog as DialogPrimitive } from "radix-ui";
+import { motion, useReducedMotion } from "framer-motion";
 import {
-  animate,
-  motion,
-  useMotionValue,
-  useReducedMotion,
-} from "framer-motion";
+  TransformWrapper,
+  TransformComponent,
+} from "react-zoom-pan-pinch";
 import { X } from "lucide-react";
 import { Button } from "@/shared/components/ui/button";
 import {
@@ -16,17 +15,20 @@ import {
 } from "@/shared/components/ui/dialog";
 import { retainMediaObjectUrl } from "@/features/chat/hooks/useCachedMedia";
 import { useHistoryModal } from "@/shared/hooks/useHistoryModal";
+import { cn } from "@/shared/lib/utils";
 
 type ImageViewerProps = {
   open: boolean;
   src: string;
-  layoutId: string;
-  originalName: string;
-  caption: string | null;
-  triggerRef: RefObject<HTMLImageElement | null>;
+  layoutId?: string;
+  originalName?: string;
+  title?: string;
+  caption?: string | null;
+  triggerRef?: RefObject<HTMLImageElement | null>;
   onOpenChange: (open: boolean) => void;
-  onCloseAutoFocus: () => void;
+  onCloseAutoFocus?: () => void;
   aspectRatio?: number | null;
+  variant?: "default" | "avatar";
 };
 
 export function ImageViewer({
@@ -34,14 +36,16 @@ export function ImageViewer({
   src,
   layoutId,
   originalName,
+  title,
   caption,
   triggerRef,
   onOpenChange,
   onCloseAutoFocus,
   aspectRatio,
+  variant = "default",
 }: ImageViewerProps) {
   const reducedMotion = useReducedMotion();
-  const y = useMotionValue(0);
+  const pointerDownPosRef = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -52,6 +56,27 @@ export function ImageViewer({
 
   // Support mobile hardware/gesture back button to close the viewer without navigating away
   useHistoryModal(open, close, "image-viewer");
+
+  const handleBackdropPointerDown = (e: React.PointerEvent) => {
+    if (e.target === e.currentTarget) {
+      pointerDownPosRef.current = { x: e.clientX, y: e.clientY };
+    } else {
+      pointerDownPosRef.current = null;
+    }
+  };
+
+  const handleBackdropPointerUp = (e: React.PointerEvent) => {
+    if (e.target === e.currentTarget && pointerDownPosRef.current) {
+      const dx = e.clientX - pointerDownPosRef.current.x;
+      const dy = e.clientY - pointerDownPosRef.current.y;
+      if (Math.hypot(dx, dy) < 5) {
+        close();
+      }
+    }
+    pointerDownPosRef.current = null;
+  };
+
+  const displayName = title ?? originalName;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -72,73 +97,102 @@ export function ImageViewer({
         <DialogPrimitive.Content
           onCloseAutoFocus={(event) => {
             event.preventDefault();
-            triggerRef.current?.focus();
-            onCloseAutoFocus();
+            triggerRef?.current?.focus();
+            onCloseAutoFocus?.();
           }}
-          className="fixed inset-0 z-[51] grid h-dvh w-screen max-w-none place-items-center gap-0 overflow-hidden border-0 bg-transparent p-0 text-foreground shadow-none outline-none"
+          className="fixed inset-0 z-[51] h-dvh w-screen max-w-none overflow-hidden border-0 bg-transparent p-0 text-foreground shadow-none outline-none select-none touch-none"
         >
-          <DialogTitle className="sr-only">Image viewer</DialogTitle>
+          <DialogTitle className="sr-only">
+            {variant === "avatar" ? "Profile photo viewer" : "Image viewer"}
+          </DialogTitle>
           <DialogDescription className="sr-only">
-            {caption || originalName || "Expanded image"}
+            {caption || displayName || "Expanded image"}
           </DialogDescription>
+
           <Button
             type="button"
             variant="ghost"
             size="icon"
             aria-label="Close image viewer"
             onClick={close}
-            className="absolute right-3 top-3 z-20 size-10 text-white hover:bg-white/15 hover:text-white sm:right-5 sm:top-5"
+            className="absolute right-3 top-3 z-30 size-10 text-white hover:bg-white/15 hover:text-white sm:right-5 sm:top-5"
           >
             <X className="size-5" />
           </Button>
-          <motion.div
-            className="relative z-10 flex h-full w-full flex-col items-center justify-center gap-3 px-3 pb-6 pt-16 sm:px-8"
-            onClick={(event) => {
-              if (event.target === event.currentTarget) close();
+
+          <TransformWrapper
+            key={src}
+            initialScale={1}
+            minScale={1}
+            maxScale={4}
+            centerOnInit={true}
+            centerZoomedOut={true}
+            limitToBounds={true}
+            wheel={{
+              step: 0.08,
+              ...({ smoothStep: 0.0008 } as Record<string, unknown>),
             }}
+            pinch={{ step: 3 }}
+            doubleClick={{ mode: "toggle", step: 0.6 }}
           >
-            <motion.img
-              layoutId={reducedMotion ? undefined : layoutId}
-              src={src}
-              alt={originalName}
-              draggable={false}
-              drag="y"
-              dragMomentum={false}
-              dragElastic={0.72}
-              style={{
-                y,
-                aspectRatio:
-                  aspectRatio && Number.isFinite(aspectRatio)
-                    ? `${aspectRatio}`
-                    : undefined,
+            <TransformComponent
+              wrapperStyle={{ width: "100vw", height: "100dvh" }}
+              wrapperProps={{
+                onPointerDown: handleBackdropPointerDown,
+                onPointerUp: handleBackdropPointerUp,
               }}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={
-                reducedMotion
-                  ? { duration: 0.12 }
-                  : { type: "spring", stiffness: 420, damping: 36 }
-              }
-              onDragEnd={(_, info) => {
-                if (info.offset.y > 120 || info.velocity.y > 850) close();
-                else
-                  animate(y, 0, {
-                    type: "spring",
-                    stiffness: 320,
-                    damping: 30,
-                  });
-              }}
-              className="max-h-[calc(100dvh-10rem)] w-auto max-w-full touch-pan-x rounded-sm object-contain sm:max-h-[calc(100dvh-11rem)]"
-            />
-            <div className="max-w-full text-center text-xs text-white/75">
+            >
+              <motion.img
+                layoutId={reducedMotion ? undefined : layoutId}
+                src={src}
+                alt={displayName || "Expanded image"}
+                draggable={false}
+                style={{
+                  aspectRatio:
+                    variant === "avatar"
+                      ? "1 / 1"
+                      : aspectRatio && Number.isFinite(aspectRatio)
+                        ? `${aspectRatio}`
+                        : undefined,
+                }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={
+                  reducedMotion
+                    ? { duration: 0.12 }
+                    : { type: "spring", stiffness: 420, damping: 36 }
+                }
+                className={cn(
+                  "select-none",
+                  variant === "avatar"
+                    ? "max-h-[65vh] max-w-[85vw] sm:max-w-md aspect-square object-cover rounded-2xl shadow-2xl"
+                    : "max-h-[calc(100dvh-10rem)] w-auto max-w-[95vw] rounded-sm object-contain sm:max-h-[calc(100dvh-11rem)]",
+                )}
+              />
+            </TransformComponent>
+          </TransformWrapper>
+
+          {(caption || displayName) && (
+            <div className="pointer-events-none absolute bottom-6 left-0 right-0 z-20 flex flex-col items-center gap-1 px-4 text-center text-xs text-white/75">
               {caption && (
-                <p className="max-w-[min(90vw,48rem)] truncate [unicode-bidi:plaintext]">{caption}</p>
+                <p className="max-w-[min(90vw,48rem)] truncate [unicode-bidi:plaintext] font-medium text-white/90">
+                  {caption}
+                </p>
               )}
-              <p className="max-w-[min(90vw,48rem)] truncate text-white/55">
-                {originalName}
-              </p>
+              {displayName && (
+                <p
+                  className={cn(
+                    "max-w-[min(90vw,48rem)] truncate",
+                    variant === "avatar"
+                      ? "font-medium text-sm text-white/90"
+                      : "text-white/55",
+                  )}
+                >
+                  {displayName}
+                </p>
+              )}
             </div>
-          </motion.div>
+          )}
         </DialogPrimitive.Content>
       </DialogPortal>
     </Dialog>

@@ -267,7 +267,7 @@ export const ChatView = memo(function ChatView({
         ref={containerRef}
         onScroll={handleScroll}
         tabIndex={0}
-        className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-6 py-2"
+        className="flex-1 min-h-0 overflow-y-auto sm:px-6 py-2"
         style={{ overflowAnchor: "auto" }}
       >
         {loading ? (

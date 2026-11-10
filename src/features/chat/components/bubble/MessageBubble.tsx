@@ -254,7 +254,7 @@ export const MessageBubble = memo(function MessageBubble({
           >
             <p
               className={cn(
-                "text-[17px] sm:text-[20px] [unicode-bidi:plaintext] whitespace-pre-wrap break-words min-w-0",
+                "text-[17px] [unicode-bidi:plaintext] whitespace-pre-wrap break-words min-w-0",
                 isVisualMedia && message.text && "w-full",
               )}
             >
