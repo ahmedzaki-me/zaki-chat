@@ -20,5 +20,6 @@ export interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   setAuth: (token: string, user: User) => void;
+  updateAvatar: (avatarUrl: string | null) => void;
   clearAuth: () => void;
 }

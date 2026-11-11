@@ -19,9 +19,16 @@ import { getProblemMessage } from "@/shared/lib/problemDetails";
 export const accountKey = ["auth", "me"] as const;
 
 export function ProfileSection() {
-  const { user: authUser } = useAuth();
+  const { user: authUser, updateAvatar } = useAuth();
   const client = useQueryClient();
-  const account = useQuery({ queryKey: accountKey, queryFn: getCurrentUser });
+  const account = useQuery({
+    queryKey: accountKey,
+    queryFn: async () => {
+      const data = await getCurrentUser();
+      updateAvatar(data.user.avatarUrl);
+      return data;
+    },
+  });
   useEffect(() => {
     if (authUser) client.setQueryData(accountKey, { user: authUser });
   }, [authUser, client]);

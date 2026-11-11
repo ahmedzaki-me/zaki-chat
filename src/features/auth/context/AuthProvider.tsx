@@ -34,6 +34,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     storage.setUser(userData);
   }, []);
 
+  const updateAvatar = useCallback((avatarUrl: string | null) => {
+    setUser((prev) => {
+      if (!prev || prev.avatarUrl === avatarUrl) return prev;
+      const next = { ...prev, avatarUrl };
+      userRef.current = next;
+      storage.setUser(next);
+      return next;
+    });
+  }, []);
+
   const clearAuth = useCallback(() => {
     void removeLocalPushSubscription(userRef.current?.id);
     userRef.current = null;
@@ -83,7 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ accessToken, user, isLoading, setAuth, clearAuth }}
+      value={{ accessToken, user, isLoading, setAuth, updateAvatar, clearAuth }}
     >
       {children}
     </AuthContext.Provider>

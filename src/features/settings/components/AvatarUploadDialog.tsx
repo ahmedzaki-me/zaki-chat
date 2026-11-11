@@ -15,6 +15,7 @@ import { UserAvatar } from "@/shared/components/UserAvatar";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { uploadFile } from "@/features/chat/api/uploads.service";
 import { setAvatar } from "@/features/auth/api/auth.service";
+import { applyUserAvatarUpdate } from "@/features/conversations/cache/conversationCache";
 import { AvatarDropzone } from "./AvatarDropzone";
 import {
   AvatarUploadProgress,
@@ -24,8 +25,6 @@ import {
   avatarError,
   processAvatarImage,
 } from "@/features/settings/utils/avatarUtils";
-
-const accountKey = ["auth", "me"] as const;
 
 interface AvatarUploadDialogProps {
   open: boolean;
@@ -40,7 +39,7 @@ export function AvatarUploadDialog({
   name,
   avatarUrl,
 }: AvatarUploadDialogProps) {
-  const { accessToken, setAuth } = useAuth();
+  const { user, updateAvatar } = useAuth();
   const client = useQueryClient();
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [blob, setBlob] = useState<Blob | null>(null);
@@ -133,9 +132,11 @@ export function AvatarUploadDialog({
       setStage("saving");
       const { user: updated } = await setAvatar(key, controller.signal);
       if (controller.signal.aborted) return;
-      if (accessToken) setAuth(accessToken, updated);
-      client.setQueryData(accountKey, { user: updated });
-      await client.invalidateQueries({ queryKey: accountKey });
+      applyUserAvatarUpdate(
+        client,
+        { id: updated.id, avatarUrl: updated.avatarUrl },
+        { currentUserId: user?.id ?? updated.id, updateAvatar },
+      );
 
       setPreviewUrl((old) => {
         if (old) URL.revokeObjectURL(old);

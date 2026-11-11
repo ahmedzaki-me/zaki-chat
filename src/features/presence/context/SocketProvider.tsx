@@ -9,6 +9,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { socket, setSocketTokenGetter } from "@/core/socket/socket";
 import { refreshSession } from "@/core/http/refreshSession";
 import { useAuth } from "@/features/auth/hooks/useAuth";
+import { applyUserAvatarUpdate } from "@/features/conversations/cache/conversationCache";
 import { SocketContext } from "./SocketContext";
 import { PeerTypingProvider, PresenceProvider } from "./ChatRealtimeProvider";
 
@@ -16,7 +17,7 @@ import { type SocketStatus } from "@/features/presence/types/presence.types";
 
 
 export function SocketProvider({ children }: { children: ReactNode }) {
-  const { user, accessToken, setAuth, clearAuth } = useAuth();
+  const { user, accessToken, setAuth, updateAvatar, clearAuth } = useAuth();
   const tokenRef = useRef(accessToken);
   const refreshedRef = useRef(false);
   const [status, setStatus] = useState<SocketStatus>("disconnected");
@@ -24,6 +25,10 @@ export function SocketProvider({ children }: { children: ReactNode }) {
   const hasConnectedOnceRef = useRef(false);
   const userId = user?.id;
   const userIdRef = useRef(userId);
+  const updateAvatarRef = useRef(updateAvatar);
+  useEffect(() => {
+    updateAvatarRef.current = updateAvatar;
+  }, [updateAvatar]);
   useEffect(() => {
     userIdRef.current = userId;
   }, [userId]);
@@ -69,6 +74,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       if (hasConnectedOnceRef.current) {
         void queryClient.invalidateQueries({ queryKey: ["conversations"] });
         void queryClient.invalidateQueries({ queryKey: ["messages"] });
+        void queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
       } else {
         hasConnectedOnceRef.current = true;
       }
@@ -85,9 +91,16 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       setStatus("disconnected");
       if ([401, 403].includes(error.data?.status ?? 0)) void recover();
     };
+    const onUserUpdated = (payload: { id: string; avatarUrl: string | null }) => {
+      applyUserAvatarUpdate(queryClient, payload, {
+        currentUserId: userIdRef.current,
+        updateAvatar: updateAvatarRef.current,
+      });
+    };
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
     socket.on("connect_error", onConnectError);
+    socket.on("user:updated", onUserUpdated);
     const onOnline = () => {
       if (userIdRef.current && !socket.connected) socket.connect();
     };
@@ -99,6 +112,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       socket.off("connect", onConnect);
       socket.off("disconnect", onDisconnect);
       socket.off("connect_error", onConnectError);
+      socket.off("user:updated", onUserUpdated);
       window.removeEventListener("online", onOnline);
       socket.disconnect();
     };

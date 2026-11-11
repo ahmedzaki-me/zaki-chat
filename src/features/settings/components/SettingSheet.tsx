@@ -29,13 +29,13 @@ import { getCurrentUser } from "@/features/auth/api/auth.service";
 import { Separator } from "@/shared/components/ui/separator";
 
 export function SettingSheet({ children }: { children: ReactNode }) {
-  const { user, accessToken, setAuth } = useAuth();
+  const { user, updateAvatar } = useAuth();
   const navigate = useNavigate();
 
   const refreshUser = () => {
     void getCurrentUser()
       .then(({ user: fresh }) => {
-        if (accessToken) setAuth(accessToken, fresh);
+        updateAvatar(fresh.avatarUrl);
       })
       .catch(() => undefined);
   };

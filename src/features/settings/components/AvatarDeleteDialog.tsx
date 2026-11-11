@@ -13,9 +13,8 @@ import {
 } from "@/shared/components/ui/alert-dialog";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { removeAvatar } from "@/features/auth/api/auth.service";
+import { applyUserAvatarUpdate } from "@/features/conversations/cache/conversationCache";
 import { avatarError } from "@/features/settings/utils/avatarUtils";
-
-const accountKey = ["auth", "me"] as const;
 
 interface AvatarDeleteDialogProps {
   open: boolean;
@@ -26,7 +25,7 @@ export function AvatarDeleteDialog({
   open,
   onOpenChange,
 }: AvatarDeleteDialogProps) {
-  const { user, accessToken, setAuth } = useAuth();
+  const { user, updateAvatar } = useAuth();
   const client = useQueryClient();
   const [isRemoving, setIsRemoving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,9 +41,11 @@ export function AvatarDeleteDialog({
     try {
       await removeAvatar();
       if (user) {
-        const updated = { ...user, avatarUrl: null };
-        if (accessToken) setAuth(accessToken, updated);
-        client.setQueryData(accountKey, { user: updated });
+        applyUserAvatarUpdate(
+          client,
+          { id: user.id, avatarUrl: null },
+          { currentUserId: user.id, updateAvatar },
+        );
       }
       onOpenChange(false);
       toast.success("Profile photo removed.");

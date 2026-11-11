@@ -27,6 +27,7 @@ export interface ServerToClientEvents {
   typing: (event: { conversationId: string; isTyping: boolean }) => void;
   "presence:updated": (event: { userId: string; online: boolean; lastSeenAt: string | null }) => void;
   "presence:snapshot": (event: { onlineUserIds: string[] }) => void;
+  "user:updated": (event: { id: string; avatarUrl: string | null }) => void;
 }
 
 export const SOCKET_EVENTS = {
