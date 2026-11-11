@@ -68,6 +68,21 @@
       }
     </script>
     <meta name="theme-color" content="oklch(0.21 0.006 285.885)" />
+    <script>
+      (function () {
+        try {
+          var isDark = localStorage.getItem("mode") === "dark";
+          var mode = isDark ? "dark" : "light";
+          var root = document.documentElement;
+          root.classList.remove("light", "dark");
+          root.classList.add(mode);
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) {
+            meta.setAttribute("content", isDark ? "oklch(0.21 0.006 285.885)" : "oklch(1 0 0)");
+          }
+        } catch (e) {}
+      })();
+    </script>
 
     <title>Zaki Chat | Chat with Ahmed Zaki</title>
   </head>

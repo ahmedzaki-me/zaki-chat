@@ -166,10 +166,25 @@
   }
 
   body {
-    @apply bg-background text-foreground bg-cover bg-no-repeat font-sans tracking-wide [word-spacing:1px];
+    @apply bg-background text-foreground font-sans tracking-wide [word-spacing:1px];
+  }
 
+  ::selection {
+    background: var(--color-chart-5);
+    color: white;
+  }
+
+  html {
+    @apply font-sans;
+  }
+}
+
+@layer components {
+  .app-wallpaper {
     background-color: oklch(0.955 0 0);
     background-image: url("/light.jpg");
+    background-size: cover;
+    background-repeat: no-repeat;
     background-position: center;
 
     @media (width >= 768px) {
@@ -180,7 +195,7 @@
     }
   }
 
-  .dark body {
+  .dark .app-wallpaper {
     background-color: oklch(18.906% 0.01009 285.373);
     background-image: url("/dark.jpg");
 
@@ -190,15 +205,6 @@
       background-repeat: repeat;
       background-position: center top;
     }
-  }
-
-  ::selection {
-    background: var(--color-chart-5);
-    color: white;
-  }
-
-  html {
-    @apply font-sans;
   }
 }
 

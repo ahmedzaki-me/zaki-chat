@@ -68,7 +68,8 @@ export default function SettingsPage() {
     return action.mutateAsync(request);
   };
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-5xl flex-col gap-5 p-4 sm:p-6">
+    <div className="app-wallpaper min-h-dvh w-full">
+      <main className="mx-auto flex min-h-dvh w-full max-w-5xl flex-col gap-5 p-4 sm:p-6">
       <header className="flex items-center gap-3">
         <Button
           variant="ghost"
@@ -117,6 +118,7 @@ export default function SettingsPage() {
           {getProblemMessage(action.error)}
         </p>
       )}
-    </main>
+      </main>
+    </div>
   );
 }

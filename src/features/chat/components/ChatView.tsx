@@ -259,7 +259,8 @@ export const ChatView = memo(function ChatView({
     : activeEditingMessage;
 
   return (
-    <div className="flex flex-col h-dvh bg-muted/10 min-h-0 inset-0 overflow-x-clip">
+    <div className="app-wallpaper flex flex-col h-dvh min-h-0 inset-0 overflow-x-clip">
+      <div className="flex flex-col flex-1 min-h-0 bg-muted/10">
       <div className="shrink-0 z-10">{header}</div>
       <OfflineBanner />
 
@@ -426,6 +427,7 @@ export const ChatView = memo(function ChatView({
           onTypingChange={typing.onTypingChange}
           onStopTyping={typing.stopTyping}
         />
+      </div>
       </div>
     </div>
   );
