@@ -36,7 +36,7 @@ export default function NotFoundPage() {
           <Button
             variant="outline"
             onClick={() => navigate(-1)}
-            className="w-full sm:w-auto gap-2 border-primary/20 hover:bg-primary/5 text-white/90"
+            className="w-full sm:w-auto gap-2 border-primary/20 hover:bg-primary/5"
           >
             <ArrowLeft className="size-4" />
             Go Back

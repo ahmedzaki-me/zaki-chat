@@ -133,33 +133,6 @@
   --sidebar-ring: oklch(0.552 0.016 285.938);
 }
 
-/* @layer base {
-  * {
-    @apply border-border outline-ring/50;
-  }
-  body {
-    @apply bg-background text-foreground  bg-cover  bg-no-repeat font-sans tracking-wide [word-spacing:1px];
-
-    @media (width >= 768px) {
-      background-image: none;
-    }
-  }
-  .dark body {
-    background-image: url("/dark.jpg");
-
-    @media (width >= 768px) {
-      background-image: none;
-    }
-  }
-  ::selection {
-    background: var(--color-chart-5);
-    color: white;
-  }
-  html {
-    @apply font-sans;
-  }
-} */
-
 @layer base {
   * {
     @apply border-border outline-ring/50;
