@@ -203,7 +203,7 @@ export const MessageBubble = memo(function MessageBubble({
           canCopy={!!message.text}
           canReply={!isSending && !isError && !message.id.startsWith("tmp-")}
           className={cn(
-            "relative px-2 py-2 max-w-[75%] shadow-sm transition-all",
+            "relative px-2 py-2 max-w-[80%] shadow-sm transition-all",
             "wrap-anywhere rounded-xl backdrop-blur flex flex-col [unicode-bidi:plaintext]",
             isVisualMedia && "w-fit min-w-[200px]",
             isOwn
