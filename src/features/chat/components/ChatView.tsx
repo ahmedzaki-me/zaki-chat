@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useRef, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Loader2, SendHorizontal } from "lucide-react";
 import { Skeleton } from "@/shared/components/ui/skeleton";
 import { useChatMessages } from "@/features/chat/hooks/useChatMessages";
@@ -34,7 +34,6 @@ interface ChatViewProps {
   otherName?: string;
   peerDeliveredUpTo?: string | null;
   peerReadUpTo?: string | null;
-  unreadCount?: number;
   isOwner?: boolean;
   peerUser?: { name: string; avatarUrl: string | null };
 }
@@ -49,7 +48,6 @@ export const ChatView = memo(function ChatView({
   otherName,
   peerDeliveredUpTo,
   peerReadUpTo,
-  unreadCount,
   isOwner = false,
   peerUser,
 }: ChatViewProps) {
@@ -96,11 +94,6 @@ export const ChatView = memo(function ChatView({
   );
   const typing = useTypingEmitter(conversationId);
 
-  const confirmed = useMemo(
-    () => [...confirmedMessages].sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
-    [confirmedMessages],
-  );
-
   const pending = useMemo(
     () =>
       [...pendingTextMessages, ...pendingUploads.messages].sort((a, b) =>
@@ -110,8 +103,8 @@ export const ChatView = memo(function ChatView({
   );
 
   const messages = useMemo(
-    () => [...confirmed, ...pending],
-    [confirmed, pending],
+    () => [...confirmedMessages, ...pending],
+    [confirmedMessages, pending],
   );
 
   const messagesById = useMemo(
@@ -119,7 +112,7 @@ export const ChatView = memo(function ChatView({
     [messages],
   );
 
-  useMarkRead(conversationId, unreadCount, messages, currentUserId);
+  useMarkRead(conversationId, messages, currentUserId);
 
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
@@ -162,19 +155,31 @@ export const ChatView = memo(function ChatView({
   );
 
   const pendingUploadsRef = useRef(pendingUploads);
-  pendingUploadsRef.current = pendingUploads;
   const retryRef = useRef(retry);
-  retryRef.current = retry;
   const deleteMessageRef = useRef(deleteMessage);
-  deleteMessageRef.current = deleteMessage;
   const deletePermanentlyRef = useRef(deletePermanently);
-  deletePermanentlyRef.current = deletePermanently;
   const toggleReactionRef = useRef(toggleReaction);
-  toggleReactionRef.current = toggleReaction;
   const handleGoToReplyRef = useRef(handleGoToReply);
-  handleGoToReplyRef.current = handleGoToReply;
   const authRef = useRef({ accessToken, setAuth });
-  authRef.current = { accessToken, setAuth };
+
+  useEffect(() => {
+    pendingUploadsRef.current = pendingUploads;
+    retryRef.current = retry;
+    deleteMessageRef.current = deleteMessage;
+    deletePermanentlyRef.current = deletePermanently;
+    toggleReactionRef.current = toggleReaction;
+    handleGoToReplyRef.current = handleGoToReply;
+    authRef.current = { accessToken, setAuth };
+  }, [
+    pendingUploads,
+    retry,
+    deleteMessage,
+    deletePermanently,
+    toggleReaction,
+    handleGoToReply,
+    accessToken,
+    setAuth,
+  ]);
 
   const handleRetry = useCallback((retryItem: PendingMessage) => {
     if (retryItem.upload) {

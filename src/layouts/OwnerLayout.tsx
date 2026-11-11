@@ -1,6 +1,7 @@
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { Navigate, Outlet } from "react-router";
 import { FullPageSpinner } from "@/shared/components/feedback/FullPageSpinner";
+import { useOwnerConversationsRealtime } from "@/features/conversations/hooks/useOwnerConversationsRealtime";
 
 
 export const OwnerLayout = () => {
@@ -14,5 +15,6 @@ export const OwnerLayout = () => {
 };
 
 const OwnerLayoutInner = () => {
+  useOwnerConversationsRealtime();
   return <Outlet />;
 };

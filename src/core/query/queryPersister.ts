@@ -1,4 +1,5 @@
 import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persister";
+import { clearAllReadWatermarks } from "@/features/chat/cache/readWatermark";
 
 const DATABASE = "zaki-chat-query-cache";
 const STORE = "query-client";
@@ -38,6 +39,7 @@ export const queryPersister = createAsyncStoragePersister({
 
 export async function clearPersistedQueryCache() {
   persistenceBlocked = true;
+  clearAllReadWatermarks();
   try {
     await queryPersister.removeClient();
   } catch {

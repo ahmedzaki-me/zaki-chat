@@ -1,7 +1,36 @@
-import { QueryClient, QueryCache, MutationCache } from "@tanstack/react-query";
+import { QueryClient, QueryCache, MutationCache, type Query } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { getProblemMessage } from "@/shared/lib/problemDetails";
 import axios from "axios";
+
+export const APP_BOOT_TIME = Date.now();
+
+function isStalePersistedQuery(query: Query, cutoffMs: number): boolean {
+  return (
+    query.state.dataUpdatedAt > 0 &&
+    query.state.dataUpdatedAt < cutoffMs &&
+    query.state.fetchStatus !== "fetching" &&
+    !query.state.isInvalidated
+  );
+}
+
+/**
+ * Invalidate persisted/pre-connection chat queries without causing duplicate fetches
+ * for fresh requests started in the current runtime.
+ */
+export function invalidateStaleChatQueries(
+  client: QueryClient,
+  cutoffMs = APP_BOOT_TIME,
+): void {
+  void client.invalidateQueries({
+    queryKey: ["conversations"],
+    predicate: (query) => isStalePersistedQuery(query, cutoffMs),
+  });
+  void client.invalidateQueries({
+    queryKey: ["messages"],
+    predicate: (query) => isStalePersistedQuery(query, cutoffMs),
+  });
+}
 
 declare module "@tanstack/react-query" {
   interface Register {

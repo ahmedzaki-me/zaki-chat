@@ -13,28 +13,28 @@ export const ChatPage = () => {
   const { data, isLoading, isError, refetch } = useConversationQuery();
 
   const conversation = data?.conversation;
+  const conversationId = conversation?.id;
+  const ownerName = conversation?.owner?.name;
+  const ownerAvatarUrl = conversation?.owner?.avatarUrl;
 
   const peerUser = useMemo(
     () => ({
-      name: conversation?.owner?.name ?? "",
-      avatarUrl: conversation?.owner?.avatarUrl ?? "",
+      name: ownerName ?? "",
+      avatarUrl: ownerAvatarUrl ?? "",
     }),
-    [conversation?.owner?.name, conversation?.owner?.avatarUrl],
+    [ownerName, ownerAvatarUrl],
   );
 
   const header = useMemo(
     () => (
       <ChatHeader
-        conversationId={conversation?.id}
-        ownerProfile={conversation?.owner ?? undefined}
+        conversationId={conversationId}
+        name={ownerName}
+        avatarUrl={ownerAvatarUrl}
         subtitleFallback="Usually respond in less than a day."
       />
     ),
-    [
-      conversation?.id,
-      conversation?.owner?.name,
-      conversation?.owner?.avatarUrl,
-    ],
+    [conversationId, ownerName, ownerAvatarUrl],
   );
 
   if (isError)
@@ -54,7 +54,6 @@ export const ChatPage = () => {
         subtitleDate={conversation?.createdAt}
         peerDeliveredUpTo={conversation?.peerDeliveredUpTo}
         peerReadUpTo={conversation?.peerReadUpTo}
-        unreadCount={conversation?.unreadCount}
         isConversationLoading={isLoading}
         introText="Your private conversation is protected."
         header={header}

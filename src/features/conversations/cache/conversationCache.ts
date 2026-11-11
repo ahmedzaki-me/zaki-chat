@@ -1,7 +1,9 @@
 import type { QueryClient } from "@tanstack/react-query";
 import type { User } from "@/features/auth/types/auth.types";
+import type { Message } from "@/features/chat/types/chat.types";
 import type {
   Conversation,
+  ConversationLastMessage,
   ConversationResponse,
   ConversationsListResponse,
 } from "@/features/conversations/types/conversation.types";
@@ -33,8 +35,8 @@ export function sortConversations(conversations: Conversation[]): Conversation[]
 export function upsertConversationList(
   old: ConversationsListResponse | undefined,
   conversation: Conversation,
-): ConversationsListResponse {
-  if (!old) return { conversations: [conversation] };
+): ConversationsListResponse | undefined {
+  if (!old) return old;
   const filtered = old.conversations.filter((item) => item.id !== conversation.id);
   const updatedList = sortConversations([conversation, ...filtered]);
   return { conversations: updatedList };
@@ -51,6 +53,20 @@ export function upsertConversationDetail(
   };
 }
 
+export function toConversationLastMessage(
+  message: Message,
+): ConversationLastMessage {
+  return {
+    id: message.id,
+    senderId: message.senderId,
+    type: message.type,
+    deletedAt: message.deletedAt ?? null,
+    text: message.text ?? null,
+    durationSec: message.media?.durationSec ?? null,
+    media: message.media ?? null,
+  };
+}
+
 export function upsertConversationCaches(
   queryClient: QueryClient,
   conversation: Conversation,
@@ -61,7 +77,7 @@ export function upsertConversationCaches(
   );
   queryClient.setQueryData<ConversationResponse>(
     conversationKeys.detail(conversation.id),
-    (old) => upsertConversationDetail(old, conversation),
+    (old) => (old ? upsertConversationDetail(old, conversation) : old),
   );
   queryClient.setQueryData<ConversationResponse>(
     conversationKeys.mine(),
@@ -69,6 +85,28 @@ export function upsertConversationCaches(
       old?.conversation.id === conversation.id
         ? upsertConversationDetail(old, conversation)
         : old,
+  );
+}
+
+export function syncConversationsToCachedDetails(
+  queryClient: QueryClient,
+  conversations: Conversation[],
+) {
+  for (const conversation of conversations) {
+    queryClient.setQueryData<ConversationResponse>(
+      conversationKeys.detail(conversation.id),
+      (old) => (old ? upsertConversationDetail(old, conversation) : old),
+    );
+  }
+}
+
+export function syncConversationToCachedList(
+  queryClient: QueryClient,
+  conversation: Conversation,
+) {
+  queryClient.setQueryData<ConversationsListResponse>(
+    conversationKeys.list(),
+    (old) => upsertConversationList(old, conversation),
   );
 }
 

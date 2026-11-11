@@ -6,7 +6,6 @@ import { Button } from "@/shared/components/ui/button";
 import { Skeleton } from "@/shared/components/ui/skeleton";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { useConversation } from "@/features/conversations/hooks/useConversations";
-import { useOwnerConversationsRealtime } from "@/features/conversations/hooks/useOwnerConversationsRealtime";
 import { ChatView } from "@/features/chat/components/ChatView";
 import { ChatHeader } from "@/features/chat/components/ChatHeader";
 
@@ -14,44 +13,51 @@ export const ConversationPage = () => {
   const { conversationId } = useParams<{ conversationId: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
-  useOwnerConversationsRealtime();
 
   const { data, isLoading, isError, error } = useConversation(conversationId);
   const conversation = data?.conversation;
+  const hasConversation = !!conversation;
+  const convId = conversation?.id;
+  const peerId = conversation?.user.id;
+  const peerName = conversation?.user.name;
+  const peerAvatarUrl = conversation?.user.avatarUrl;
+  const peerUsername = conversation?.user.username;
+  const peerLastSeenAt = conversation?.user.lastSeenAt;
 
   const peerUser = useMemo(
     () =>
-      conversation
+      hasConversation && peerName !== undefined
         ? {
-            name: conversation.user.name,
-            avatarUrl: conversation.user.avatarUrl,
+            name: peerName,
+            avatarUrl: peerAvatarUrl ?? null,
           }
         : undefined,
-    [conversation?.user.name, conversation?.user.avatarUrl],
+    [hasConversation, peerName, peerAvatarUrl],
   );
 
   const header = useMemo(
     () =>
-      conversation ? (
+      hasConversation ? (
         <ChatHeader
-          conversationId={conversation.id}
-          name={conversation.user.name}
-          avatarUrl={conversation.user.avatarUrl}
-          username={conversation.user.username}
-          userId={conversation.user.id}
-          lastSeenAt={conversation.user.lastSeenAt}
+          conversationId={convId}
+          name={peerName}
+          avatarUrl={peerAvatarUrl}
+          username={peerUsername}
+          userId={peerId}
+          lastSeenAt={peerLastSeenAt}
           showBack
           showGuestBadge
           isLoading={false}
         />
       ) : null,
     [
-      conversation?.id,
-      conversation?.user.id,
-      conversation?.user.name,
-      conversation?.user.avatarUrl,
-      conversation?.user.username,
-      conversation?.user.lastSeenAt,
+      hasConversation,
+      convId,
+      peerId,
+      peerName,
+      peerAvatarUrl,
+      peerUsername,
+      peerLastSeenAt,
     ],
   );
 
@@ -128,7 +134,6 @@ export const ConversationPage = () => {
       peerUser={peerUser}
       peerDeliveredUpTo={conversation.peerDeliveredUpTo}
       peerReadUpTo={conversation.peerReadUpTo}
-      unreadCount={conversation.unreadCount}
       isOwner
     />
   );

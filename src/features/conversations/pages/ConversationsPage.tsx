@@ -17,7 +17,6 @@ import {
   useConversationsList,
   usePinMutation,
 } from "@/features/conversations/hooks/useConversations";
-import { useOwnerConversationsRealtime } from "@/features/conversations/hooks/useOwnerConversationsRealtime";
 import { sortConversations } from "@/features/conversations/cache/conversationCache";
 import { ConversationsActions } from "@/features/conversations/components/ConversationsActions";
 import { useAuth } from "@/features/auth/hooks/useAuth";
@@ -112,7 +111,6 @@ function ConversationItem({
 export default function ConversationsPage() {
   const [search, setSearch] = useState("");
   const navigate = useNavigate();
-  useOwnerConversationsRealtime();
   const { data, isLoading } = useConversationsList();
   const pinMutation = usePinMutation();
 

@@ -3,12 +3,13 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { InfiniteData } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useMessages, messagesKeys } from "@/features/chat/hooks/useMessagesQuery";
-import { conversationKeys } from "@/features/conversations/hooks/useConversations";
 import type { Message, MessagesResponse, PendingMessage } from "@/features/chat/types/chat.types";
-import type { Conversation, ConversationResponse } from "@/features/conversations/types/conversation.types";
 import { emitWithAck, socket } from "@/core/socket/socket";
 import { clearMessages, patchMessage, removeMessage, upsertMessage } from "@/features/chat/cache/messageCache";
-import { upsertConversationCaches, upsertConversationDetail } from "@/features/conversations/cache/conversationCache";
+import {
+  clearConversationReadWatermark,
+  compareMessageIds,
+} from "@/features/chat/cache/readWatermark";
 import { playOutgoingSound } from "@/shared/lib/sounds";
 import { sendMediaMessage, type MediaMessagePayload, interceptPendingMediaMessage } from "@/features/chat/api/mediaMessage.api";
 import { remove as removeCachedMedia } from "@/features/chat/cache/mediaCache";
@@ -23,7 +24,6 @@ export function useChatMessages(conversationId: string | undefined, currentUserI
   const hasNextPage = query.hasNextPage;
   const [pending, setPending] = useState<PendingMessage[]>([]);
   const pendingRef = useRef(pending);
-  pendingRef.current = pending;
   const [missingIds, setMissingIds] = useState<Set<string>>(() => new Set());
   const creationTime = useRef(0);
 
@@ -34,7 +34,11 @@ export function useChatMessages(conversationId: string | undefined, currentUserI
     const uniqueMessages = [
       ...new Map(pagedMessages.map((message) => [message.id, message])).values(),
     ];
-    return uniqueMessages.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    return uniqueMessages.sort(
+      (a, b) =>
+        a.createdAt.localeCompare(b.createdAt) ||
+        compareMessageIds(a.id, b.id),
+    );
   }, [query.data]);
 
   const messages = useMemo(() => {
@@ -46,9 +50,13 @@ export function useChatMessages(conversationId: string | undefined, currentUserI
     [messages],
   );
   const messagesByIdRef = useRef(messagesById);
-  messagesByIdRef.current = messagesById;
   const missingIdsRef = useRef(missingIds);
-  missingIdsRef.current = missingIds;
+
+  useEffect(() => {
+    pendingRef.current = pending;
+    messagesByIdRef.current = messagesById;
+    missingIdsRef.current = missingIds;
+  }, [pending, messagesById, missingIds]);
 
   const updateCache = useCallback((fn: (data: InfiniteData<MessagesResponse> | undefined) => InfiniteData<MessagesResponse> | undefined) => {
     queryClient.setQueryData<InfiniteData<MessagesResponse>>(key, fn);
@@ -244,6 +252,7 @@ export function useChatMessages(conversationId: string | undefined, currentUserI
     };
     const onCleared = ({ conversationId: idConversation }: { conversationId: string }) => {
       if (idConversation !== conversationId) return;
+      clearConversationReadWatermark(idConversation);
       const cached = queryClient.getQueryData<InfiniteData<MessagesResponse>>(key);
       for (const message of cached?.pages.flatMap((page) => page.messages) ?? []) {
         if (message.media) void removeCachedMedia(message.id);
@@ -251,15 +260,9 @@ export function useChatMessages(conversationId: string | undefined, currentUserI
       updateCache(clearMessages);
       setPending([]);
     };
-    const onConversation = ({ conversation }: { conversation: Conversation }) => {
-      if (conversation.id !== conversationId) return;
-      upsertConversationCaches(queryClient, conversation);
-      queryClient.setQueryData<ConversationResponse>(conversationKeys.detail(conversationId), (old) => upsertConversationDetail(old, conversation));
-      queryClient.setQueryData<ConversationResponse>(conversationKeys.mine(), (old) => old?.conversation.id === conversationId ? { conversation: { ...old.conversation, ...conversation } } : old);
-    };
     socket.on("message:new", onNew); socket.on("message:updated", onUpdated); socket.on("message:deleted", onDeleted);
-    socket.on("conversation:cleared", onCleared); socket.on("conversation:updated", onConversation);
-    return () => { socket.off("message:new", onNew); socket.off("message:updated", onUpdated); socket.off("message:deleted", onDeleted); socket.off("conversation:cleared", onCleared); socket.off("conversation:updated", onConversation); };
+    socket.on("conversation:cleared", onCleared);
+    return () => { socket.off("message:new", onNew); socket.off("message:updated", onUpdated); socket.off("message:deleted", onDeleted); socket.off("conversation:cleared", onCleared); };
   }, [conversationId, currentUserId, key, queryClient, updateCache]);
 
   return {

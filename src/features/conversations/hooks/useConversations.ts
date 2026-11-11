@@ -1,6 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import type { ConversationResponse } from "@/features/conversations/types/conversation.types";
+import type {
+  ConversationResponse,
+  ConversationsListResponse,
+} from "@/features/conversations/types/conversation.types";
 import {
   getConversation,
   getConversations,
@@ -8,7 +11,11 @@ import {
   pinConversation,
   unpinConversation,
 } from "@/features/conversations/api/conversation.service";
-import { upsertConversationCaches } from "@/features/conversations/cache/conversationCache";
+import {
+  syncConversationsToCachedDetails,
+  syncConversationToCachedList,
+  upsertConversationCaches,
+} from "@/features/conversations/cache/conversationCache";
 
 export const conversationKeys = {
   all: ["conversations"] as const,
@@ -17,12 +24,29 @@ export const conversationKeys = {
   mine: () => [...conversationKeys.all, "me"] as const,
 };
 
-export const useConversation = (id: string | undefined) =>
-  useQuery({
+export const useConversation = (id: string | undefined) => {
+  const queryClient = useQueryClient();
+  return useQuery({
     queryKey: conversationKeys.detail(id ?? ""),
-    queryFn: () => getConversation(id!),
+    queryFn: async () => {
+      const data = await getConversation(id!);
+      syncConversationToCachedList(queryClient, data.conversation);
+      return data;
+    },
     enabled: !!id,
+    initialData: () => {
+      if (!id) return undefined;
+      const listState = queryClient.getQueryState<ConversationsListResponse>(
+        conversationKeys.list(),
+      );
+      if (!listState || listState.isInvalidated) return undefined;
+      const match = listState.data?.conversations.find((c) => c.id === id);
+      return match ? { conversation: match } : undefined;
+    },
+    initialDataUpdatedAt: () =>
+      queryClient.getQueryState(conversationKeys.list())?.dataUpdatedAt,
   });
+};
 
 export const useConversationQuery = (options?: { enabled?: boolean }) =>
   useQuery({
@@ -31,11 +55,17 @@ export const useConversationQuery = (options?: { enabled?: boolean }) =>
     enabled: options?.enabled ?? true,
   });
 
-export const useConversationsList = () =>
-  useQuery({
+export const useConversationsList = () => {
+  const queryClient = useQueryClient();
+  return useQuery({
     queryKey: conversationKeys.list(),
-    queryFn: getConversations,
+    queryFn: async () => {
+      const data = await getConversations();
+      syncConversationsToCachedDetails(queryClient, data.conversations);
+      return data;
+    },
   });
+};
 
 export function usePinMutation() {
   const queryClient = useQueryClient();

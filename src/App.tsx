@@ -3,7 +3,11 @@ import { router } from "@/core/router/routes";
 import { AuthProvider } from "@/features/auth/context/AuthProvider";
 import { SocketProvider } from "@/features/presence/context/SocketProvider";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
-import { queryClient } from "@/core/query/queryClient";
+import {
+  APP_BOOT_TIME,
+  invalidateStaleChatQueries,
+  queryClient,
+} from "@/core/query/queryClient";
 import { queryPersister } from "@/core/query/queryPersister";
 // import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { ThemeProvider } from "@/shared/context/ThemeProvider";
@@ -28,6 +32,7 @@ function App() {
   return (
     <PersistQueryClientProvider
       client={queryClient}
+      onSuccess={() => invalidateStaleChatQueries(queryClient, APP_BOOT_TIME)}
       persistOptions={{
         persister: queryPersister,
         maxAge: 1000 * 60 * 60 * 24 * 7,
