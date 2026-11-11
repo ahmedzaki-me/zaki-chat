@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { cn } from "@/shared/lib/utils";
 import { Button } from "@/shared/components/ui/button";
 import { Card, CardContent } from "@/shared/components/ui/card";
@@ -8,7 +7,6 @@ import {
   FieldGroup,
   FieldSeparator,
 } from "@/shared/components/ui/field";
-import { Spinner } from "@/shared/components/ui/spinner";
 import { Link } from "react-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -17,10 +15,8 @@ import { GuestLogin } from "@/features/auth/components/GuestLogin";
 import { login } from "@/features/auth/api/auth.service";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { handleFormProblemErrors } from "@/shared/lib/problemDetails";
-import {
-  useTurnstileToken,
-  TurnstileSlot,
-} from "@/features/auth/context/TurnstileProvider";
+import { TurnstileWidget } from "@/features/auth/components/TurnstileWidget";
+import { useTurnstile } from "@/features/auth/hooks/useTurnstile";
 import { InputField } from "@/features/auth/components/InputField";
 import { PasswordField } from "@/features/auth/components/PasswordField";
 import { FormServerError } from "@/features/auth/components/FormServerError";
@@ -33,8 +29,7 @@ export function LoginForm({
   className,
   ...props
 }: React.ComponentProps<"div">) {
-  const { token, consume, reset, waitForToken, isEnabled } = useTurnstileToken();
-  const [isVerifying, setIsVerifying] = useState(false);
+  const { token, setToken, ref: turnstileRef, reset: resetTurnstile, isReady } = useTurnstile();
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -47,29 +42,13 @@ export function LoginForm({
   const { setAuth } = useAuth();
 
   const onSubmit = async (data: LoginFormValues) => {
-    if (isVerifying) return;
-
-    let authToken = token;
-    if (isEnabled && !authToken) {
-      setIsVerifying(true);
-      try {
-        authToken = await waitForToken();
-      } catch {
-        setIsVerifying(false);
-        return;
-      }
-      setIsVerifying(false);
-    }
-
-    consume();
-
     try {
-      const response = await login(data.username, data.password, authToken);
+      const response = await login(data.username, data.password, token);
       if (response.user) {
         setAuth(response.accessToken, response.user);
       }
     } catch (error) {
-      reset();
+      resetTurnstile();
       handleFormProblemErrors(error, form.setError, {
         defaultMessage: "Invalid username or password",
       });
@@ -118,20 +97,20 @@ export function LoginForm({
                 message={form.formState.errors.root?.serverError?.message}
               />
 
-              <TurnstileSlot />
+              <TurnstileWidget
+                ref={turnstileRef}
+                action="login"
+                onSuccess={setToken}
+                onExpire={resetTurnstile}
+              />
 
               <Field>
                 <Button
                   type="submit"
-                  disabled={form.formState.isSubmitting || isVerifying}
+                  disabled={form.formState.isSubmitting || !isReady}
                   className="w-full text-white/90"
                 >
-                  {isVerifying ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <Spinner className="size-3.5" />
-                      <span>Verifying you&apos;re human...</span>
-                    </span>
-                  ) : form.formState.isSubmitting ? (
+                  {form.formState.isSubmitting ? (
                     "Logging in..."
                   ) : (
                     "Login"
@@ -143,7 +122,7 @@ export function LoginForm({
 
               <Field>
                 <GuestLogin
-                  isSubmitting={form.formState.isSubmitting || isVerifying}
+                  isSubmitting={form.formState.isSubmitting}
                 />
               </Field>
 

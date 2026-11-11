@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { cn } from "@/shared/lib/utils";
 import { Button } from "@/shared/components/ui/button";
 import { Card, CardContent } from "@/shared/components/ui/card";
@@ -7,7 +6,6 @@ import {
   FieldDescription,
   FieldGroup,
 } from "@/shared/components/ui/field";
-import { Spinner } from "@/shared/components/ui/spinner";
 import { Link } from "react-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -15,10 +13,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { signup } from "@/features/auth/api/auth.service";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { handleFormProblemErrors } from "@/shared/lib/problemDetails";
-import {
-  useTurnstileToken,
-  TurnstileSlot,
-} from "@/features/auth/context/TurnstileProvider";
+import { TurnstileWidget } from "@/features/auth/components/TurnstileWidget";
+import { useTurnstile } from "@/features/auth/hooks/useTurnstile";
 import { InputField } from "@/features/auth/components/InputField";
 import { PasswordField } from "@/features/auth/components/PasswordField";
 import { FormServerError } from "@/features/auth/components/FormServerError";
@@ -32,8 +28,13 @@ export function SignupForm({
   ...props
 }: React.ComponentProps<"div">) {
   const { setAuth } = useAuth();
-  const { token, consume, reset, waitForToken, isEnabled } = useTurnstileToken();
-  const [isVerifying, setIsVerifying] = useState(false);
+  const {
+    token,
+    setToken,
+    ref: turnstileRef,
+    reset: resetTurnstile,
+    isReady,
+  } = useTurnstile();
 
   const form = useForm<SignupFormValues>({
     resolver: zodResolver(signupSchema),
@@ -47,35 +48,19 @@ export function SignupForm({
   });
 
   const onSubmit = async (data: SignupFormValues) => {
-    if (isVerifying) return;
-
-    let authToken = token;
-    if (isEnabled && !authToken) {
-      setIsVerifying(true);
-      try {
-        authToken = await waitForToken();
-      } catch {
-        setIsVerifying(false);
-        return;
-      }
-      setIsVerifying(false);
-    }
-
-    consume();
-
     try {
       const result = await signup(
         data.name,
         data.username,
         data.password,
-        authToken,
+        token,
       );
 
       if (result.user) {
         setAuth(result.accessToken, result.user);
       }
     } catch (error) {
-      reset();
+      resetTurnstile();
       handleFormProblemErrors(error, form.setError, {
         conflictField: "username",
         defaultMessage: "Signup failed",
@@ -135,24 +120,22 @@ export function SignupForm({
                 message={form.formState.errors.root?.serverError?.message}
               />
 
-              <TurnstileSlot />
+              <TurnstileWidget
+                ref={turnstileRef}
+                action="signup"
+                onSuccess={setToken}
+                onExpire={resetTurnstile}
+              />
 
               <Field>
                 <Button
                   type="submit"
                   className="w-full text-white/90"
-                  disabled={form.formState.isSubmitting || isVerifying}
+                  disabled={form.formState.isSubmitting || !isReady}
                 >
-                  {isVerifying ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <Spinner className="size-3.5" />
-                      <span>Verifying you&apos;re human...</span>
-                    </span>
-                  ) : form.formState.isSubmitting ? (
-                    "Creating..."
-                  ) : (
-                    "Create Account"
-                  )}
+                  {form.formState.isSubmitting
+                    ? "Creating..."
+                    : "Create Account"}
                 </Button>
               </Field>
 

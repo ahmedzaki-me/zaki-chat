@@ -3,14 +3,11 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/shared/components/ui/button";
 import { FieldGroup } from "@/shared/components/ui/field";
-import { Spinner } from "@/shared/components/ui/spinner";
 import { signInGuest } from "@/features/auth/api/auth.service";
 import { handleFormProblemErrors } from "@/shared/lib/problemDetails";
 import { useAuth } from "@/features/auth/hooks/useAuth";
-import {
-  useTurnstileToken,
-  TurnstileSlot,
-} from "@/features/auth/context/TurnstileProvider";
+import { TurnstileWidget } from "@/features/auth/components/TurnstileWidget";
+import { useTurnstile } from "@/features/auth/hooks/useTurnstile";
 import { InputField } from "@/features/auth/components/InputField";
 import { FormServerError } from "@/features/auth/components/FormServerError";
 import {
@@ -41,10 +38,15 @@ export function GuestLoginForm({
   inline = false,
 }: GuestLoginFormProps) {
   const [isGuestLoading, setIsGuestLoading] = useState(false);
-  const [isVerifying, setIsVerifying] = useState(false);
 
   const { setAuth } = useAuth();
-  const { token, consume, reset, waitForToken, isEnabled } = useTurnstileToken();
+  const {
+    token,
+    setToken,
+    ref: turnstileRef,
+    reset: resetTurnstile,
+    isReady,
+  } = useTurnstile();
 
   const form = useForm<GuestFormValues>({
     resolver: zodResolver(guestSchema),
@@ -54,31 +56,17 @@ export function GuestLoginForm({
   });
 
   const onSubmit = async (values: GuestFormValues) => {
-    if (isVerifying || isGuestLoading) return;
-
-    let authToken = token;
-    if (isEnabled && !authToken) {
-      setIsVerifying(true);
-      try {
-        authToken = await waitForToken();
-      } catch {
-        setIsVerifying(false);
-        return;
-      }
-      setIsVerifying(false);
-    }
-
-    consume();
+    if (isGuestLoading) return;
 
     setIsGuestLoading(true);
     try {
-      const result = await signInGuest(values.name, authToken);
+      const result = await signInGuest(values.name, token);
       if (result.user) {
         setAuth(result.accessToken, result.user);
         onSuccess?.();
       }
     } catch (error) {
-      reset();
+      resetTurnstile();
       handleFormProblemErrors(error, form.setError, {
         defaultMessage: "Failed to login as guest",
       });
@@ -108,7 +96,12 @@ export function GuestLoginForm({
             </label>
           )}
 
-          <TurnstileSlot />
+          <TurnstileWidget
+            ref={turnstileRef}
+            action="guest"
+            onSuccess={setToken}
+            onExpire={resetTurnstile}
+          />
 
           <div className="flex flex-col gap-2.5 sm:flex-row sm:items-start">
             <div className="min-w-0 flex-1">
@@ -124,19 +117,10 @@ export function GuestLoginForm({
             </div>
             <Button
               type="submit"
-              disabled={isGuestLoading || isVerifying}
+              disabled={isGuestLoading || !isReady}
               className="h-10 w-full shrink-0 px-4 text-white/90 sm:h-7 sm:w-auto"
             >
-              {isVerifying ? (
-                <span className="flex items-center justify-center gap-2">
-                  <Spinner className="size-3.5" />
-                  <span>Verifying you&apos;re human...</span>
-                </span>
-              ) : isGuestLoading ? (
-                "Connecting..."
-              ) : (
-                submitLabel
-              )}
+              {isGuestLoading ? "Connecting..." : submitLabel}
             </Button>
           </div>
         </div>
@@ -159,7 +143,12 @@ export function GuestLoginForm({
 
       {!inline && (
         <>
-          <TurnstileSlot />
+          <TurnstileWidget
+            ref={turnstileRef}
+            action="guest"
+            onSuccess={setToken}
+            onExpire={resetTurnstile}
+          />
 
           {onCancel ? (
             <div className="mt-2 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
@@ -168,37 +157,19 @@ export function GuestLoginForm({
               </Button>
               <Button
                 type="submit"
-                disabled={isGuestLoading || isVerifying}
+                disabled={isGuestLoading || !isReady}
                 className="text-white/90"
               >
-                {isVerifying ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <Spinner className="size-3.5" />
-                    <span>Verifying you&apos;re human...</span>
-                  </span>
-                ) : isGuestLoading ? (
-                  "Logging in..."
-                ) : (
-                  submitLabel
-                )}
+                {isGuestLoading ? "Logging in..." : submitLabel}
               </Button>
             </div>
           ) : (
             <Button
               type="submit"
-              disabled={isGuestLoading || isVerifying}
+              disabled={isGuestLoading || !isReady}
               className="w-full text-white/90"
             >
-              {isVerifying ? (
-                <span className="flex items-center justify-center gap-2">
-                  <Spinner className="size-3.5" />
-                  <span>Verifying you&apos;re human...</span>
-                </span>
-              ) : isGuestLoading ? (
-                "Logging in..."
-              ) : (
-                submitLabel
-              )}
+              {isGuestLoading ? "Logging in..." : submitLabel}
             </Button>
           )}
         </>
