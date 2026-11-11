@@ -209,7 +209,7 @@ export function useVoiceRecorder(onSend: (recording: VoiceRecording) => void, en
       return;
     }
     setState((current) => ({ ...current, dragX: pointer.dragX, dragY: Math.min(0, dy) }));
-  }, [setStatus]);
+  }, []);
 
   const pointerUp = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
     const pointer = pointerRef.current;

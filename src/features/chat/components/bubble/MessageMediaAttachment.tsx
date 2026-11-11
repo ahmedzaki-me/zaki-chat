@@ -42,6 +42,7 @@ function areMessageMediaAttachmentPropsEqual(
   next: MessageMediaAttachmentProps,
 ): boolean {
   if (prev.message.id !== next.message.id) return false;
+  if (prev.message.text !== next.message.text) return false;
   if (prev.message.deletedAt !== next.message.deletedAt) return false;
   if (prev.onMediaLoadError !== next.onMediaLoadError) return false;
 
@@ -122,16 +123,9 @@ export const MessageMediaAttachment = memo(
 
     const mediaUrl = message.media?.url;
     const isLocalUpload = !!pendingMessage?.upload;
-    const lastPreviewUrlRef = useRef<string | null>(null);
-    if (isLocalUpload && mediaUrl) {
-      lastPreviewUrlRef.current = mediaUrl;
-    }
-    if (mediaCache.objectUrl) {
-      lastPreviewUrlRef.current = null;
-    }
     const resolvedMediaUrl = isLocalUpload
       ? mediaUrl
-      : (mediaCache.objectUrl ?? lastPreviewUrlRef.current ?? mediaCache.fallbackUrl);
+      : (mediaCache.objectUrl ?? mediaCache.fallbackUrl);
 
     const cachedMeta = mediaCacheService.getMemory(message.id);
     const [mediaDimensions, setMediaDimensions] = useState<{
@@ -165,7 +159,6 @@ export const MessageMediaAttachment = memo(
     const shouldLoadMedia =
       isLocalUpload ||
       mediaCache.hasCachedBlob ||
-      !!lastPreviewUrlRef.current ||
       !!mediaCache.fallbackUrl;
     const mediaLoadFailed = !!mediaUrl && failedMediaUrl === mediaUrl;
     const mediaLoading =

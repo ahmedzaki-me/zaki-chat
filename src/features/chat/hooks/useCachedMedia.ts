@@ -48,6 +48,44 @@ type ObjectUrlEntry = {
 
 const messageObjectUrls = new Map<string, ObjectUrlEntry>();
 
+function scheduleGraceRevoke(messageId: string, entry: ObjectUrlEntry): void {
+  if (entry.revokeTimer) clearTimeout(entry.revokeTimer);
+  entry.revokeTimer = setTimeout(() => {
+    const current = messageObjectUrls.get(messageId);
+    if (current === entry && current.refCount <= 0) {
+      revokeMediaObjectUrl(current.url);
+      messageObjectUrls.delete(messageId);
+    }
+  }, 5000);
+}
+
+/**
+ * Ensures an ObjectURL exists for `(messageId, blob)` without mutating `refCount`.
+ * Schedules a 5s grace cleanup in case an effect never mounts to acquire it.
+ */
+function ensureMediaObjectUrl(messageId: string, blob: Blob): string {
+  const existing = messageObjectUrls.get(messageId);
+  if (existing) {
+    if (existing.blob === blob) {
+      return existing.url;
+    }
+    if (existing.revokeTimer) clearTimeout(existing.revokeTimer);
+    revokeMediaObjectUrl(existing.url);
+    messageObjectUrls.delete(messageId);
+  }
+
+  const url = URL.createObjectURL(blob);
+  const entry: ObjectUrlEntry = {
+    url,
+    blob,
+    refCount: 0,
+    revokeTimer: null,
+  };
+  messageObjectUrls.set(messageId, entry);
+  scheduleGraceRevoke(messageId, entry);
+  return url;
+}
+
 export function getOrCreateMediaObjectUrl(messageId: string, blob: Blob): string {
   const existing = messageObjectUrls.get(messageId);
   if (existing) {
@@ -76,18 +114,13 @@ export function getOrCreateMediaObjectUrl(messageId: string, blob: Blob): string
   return url;
 }
 
-export function releaseMediaObjectUrl(messageId: string): void {
+export function releaseMediaObjectUrl(messageId: string, expectedBlob?: Blob): void {
   const existing = messageObjectUrls.get(messageId);
   if (!existing) return;
-  existing.refCount--;
+  if (expectedBlob && existing.blob !== expectedBlob) return;
+  existing.refCount = Math.max(0, existing.refCount - 1);
   if (existing.refCount <= 0) {
-    if (existing.revokeTimer) clearTimeout(existing.revokeTimer);
-    existing.revokeTimer = setTimeout(() => {
-      if (existing.refCount <= 0) {
-        revokeMediaObjectUrl(existing.url);
-        messageObjectUrls.delete(messageId);
-      }
-    }, 5000);
+    scheduleGraceRevoke(messageId, existing);
   }
 }
 
@@ -156,9 +189,7 @@ export function useCachedMedia(
   onDownloadError?: () => void,
 ) {
   const mediaRef = useRef(media);
-  mediaRef.current = media;
   const onDownloadErrorRef = useRef(onDownloadError);
-  onDownloadErrorRef.current = onDownloadError;
 
   const initialMemory = enabled && media ? mediaCache.getMemory(messageId) : null;
   const initialSyncStatus = enabled && media ? mediaCache.isCachedSync(messageId) : null;
@@ -169,12 +200,6 @@ export function useCachedMedia(
     if (initialMemory) return true;
     if (initialSyncStatus === false) return true;
     return false;
-  });
-  const [objectUrl, setObjectUrl] = useState<string | null>(() => {
-    if (initialMemory?.blob) {
-      return getOrCreateMediaObjectUrl(messageId, initialMemory.blob);
-    }
-    return null;
   });
 
   const [loading, setLoading] = useState(false);
@@ -189,41 +214,49 @@ export function useCachedMedia(
   const [prevEnabled, setPrevEnabled] = useState(enabled);
 
   const mem = enabled && media ? mediaCache.getMemory(messageId) : null;
+  const isSameKey = messageId === prevId && enabled === prevEnabled;
 
-  if (messageId !== prevId || enabled !== prevEnabled) {
-    if (prevId && prevId !== messageId) {
-      releaseMediaObjectUrl(prevId);
-    }
+  if (!isSameKey) {
     setPrevId(messageId);
     setPrevEnabled(enabled);
+    setLoading(false);
+    setProgress({ loaded: 0, total: null, percent: null });
 
     if (mem) {
-      savedAt.current = mem.savedAt;
-      const nextUrl = getOrCreateMediaObjectUrl(messageId, mem.blob);
       setCachedBlob(mem.blob);
-      setObjectUrl(nextUrl);
       setCacheChecked(true);
       setDownloadError(null);
       setFallback(null);
     } else {
-      savedAt.current = null;
       setCachedBlob(null);
-      setObjectUrl(null);
       setCacheChecked(
         enabled && media ? mediaCache.isCachedSync(messageId) === false : true,
       );
       setDownloadError(null);
       setFallback(null);
     }
-  } else if (mem && (cachedBlob !== mem.blob || !objectUrl)) {
-    savedAt.current = mem.savedAt;
-    const nextUrl = getOrCreateMediaObjectUrl(messageId, mem.blob);
+  } else if (mem && cachedBlob !== mem.blob) {
     setCachedBlob(mem.blob);
-    setObjectUrl(nextUrl);
     setCacheChecked(true);
     setDownloadError(null);
     setFallback(null);
   }
+
+  const activeBlob = !enabled || !media
+    ? null
+    : mem?.blob ?? (isSameKey ? cachedBlob : null);
+  const objectUrl = activeBlob ? ensureMediaObjectUrl(messageId, activeBlob) : null;
+
+  const activeBlobRef = useRef(activeBlob);
+  useEffect(() => {
+    mediaRef.current = media;
+    onDownloadErrorRef.current = onDownloadError;
+    activeBlobRef.current = activeBlob;
+  }, [media, onDownloadError, activeBlob]);
+
+  useEffect(() => {
+    savedAt.current = mem?.savedAt ?? null;
+  }, [messageId, enabled, mem?.savedAt]);
 
   useEffect(() => {
     if (!enabled || !hasMedia) {
@@ -264,7 +297,7 @@ export function useCachedMedia(
     const syncStatus = mediaCache.isCachedSync(messageId);
     if (syncStatus === false) {
       setCacheChecked(true);
-    } else if (!cachedBlob) {
+    } else if (!activeBlobRef.current) {
       void read();
     }
 
@@ -274,27 +307,28 @@ export function useCachedMedia(
     return () => {
       active = false;
       unsubscribe();
-      controller.current?.abort();
     };
-  }, [cachedBlob, enabled, hasMedia, messageId]);
+  }, [enabled, hasMedia, messageId]);
 
   useEffect(() => {
-    if (!cachedBlob) {
-      setObjectUrl(null);
-      return;
-    }
-    const url = getOrCreateMediaObjectUrl(messageId, cachedBlob);
-    setObjectUrl(url);
     return () => {
-      releaseMediaObjectUrl(messageId);
+      controller.current?.abort();
+      controller.current = null;
     };
-  }, [cachedBlob, messageId]);
+  }, [enabled, messageId]);
+
+  useEffect(() => {
+    if (!activeBlob) return;
+    getOrCreateMediaObjectUrl(messageId, activeBlob);
+    return () => {
+      releaseMediaObjectUrl(messageId, activeBlob);
+    };
+  }, [activeBlob, messageId]);
 
   const download = useCallback(async () => {
     const currentMedia = mediaRef.current;
-    if (!currentMedia || loading) return;
+    if (!currentMedia || controller.current) return;
     const abortController = new AbortController();
-    controller.current?.abort();
     controller.current = abortController;
     setLoading(true);
     setDownloadError(null);
@@ -333,10 +367,10 @@ export function useCachedMedia(
       if (controller.current === abortController) controller.current = null;
       if (!abortController.signal.aborted) setLoading(false);
     }
-  }, [loading, messageId]);
+  }, [messageId]);
 
   const retry = useCallback(async () => {
-    if (cachedBlob) {
+    if (activeBlobRef.current) {
       savedAt.current = null;
       setCachedBlob(null);
       await mediaCache.remove(messageId);
@@ -344,12 +378,12 @@ export function useCachedMedia(
     setFallback(null);
     setDownloadError(null);
     await download();
-  }, [cachedBlob, download, messageId]);
+  }, [download, messageId]);
 
   return {
     cacheChecked,
-    cachedBlob,
-    hasCachedBlob: !!cachedBlob,
+    cachedBlob: activeBlob,
+    hasCachedBlob: !!activeBlob,
     objectUrl,
     fallbackUrl: fallback ? media?.url ?? fallback : null,
     loading,
