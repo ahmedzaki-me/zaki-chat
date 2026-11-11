@@ -6,6 +6,8 @@ export interface TurnstileWidgetProps {
   onSuccess: (token: string) => void;
   onExpire?: () => void;
   onError?: (error?: unknown) => void;
+  hasError?: boolean;
+  onRetry?: () => void;
   action?: string;
   className?: string;
   size?: "normal" | "flexible" | "compact";
@@ -20,6 +22,8 @@ export const TurnstileWidget = forwardRef<
       onSuccess,
       onExpire,
       onError,
+      hasError = false,
+      onRetry,
       action,
       className = "",
       size = "normal",
@@ -35,7 +39,7 @@ export const TurnstileWidget = forwardRef<
 
     return (
       <div
-        className={`my-2 flex min-h-[65px] w-full items-center justify-center ${className}`}
+        className={`my-2 flex min-h-[65px] w-full flex-col items-center justify-center gap-1.5 ${className}`}
       >
         <Turnstile
           ref={ref}
@@ -49,6 +53,20 @@ export const TurnstileWidget = forwardRef<
           onExpire={onExpire}
           onError={onError}
         />
+        {hasError && (
+          <p role="alert" className="text-center text-xs text-destructive">
+            Security check failed to load.{" "}
+            {onRetry && (
+              <button
+                type="button"
+                onClick={onRetry}
+                className="cursor-pointer font-medium underline underline-offset-2 hover:text-destructive/80"
+              >
+                Retry
+              </button>
+            )}
+          </p>
+        )}
       </div>
     );
   },

@@ -30,9 +30,11 @@ export function SignupForm({
   const { setAuth } = useAuth();
   const {
     token,
+    hasError: turnstileError,
     setToken,
     ref: turnstileRef,
     reset: resetTurnstile,
+    handleError: handleTurnstileError,
     isReady,
   } = useTurnstile();
 
@@ -125,6 +127,9 @@ export function SignupForm({
                 action="signup"
                 onSuccess={setToken}
                 onExpire={resetTurnstile}
+                onError={handleTurnstileError}
+                hasError={turnstileError}
+                onRetry={resetTurnstile}
               />
 
               <Field>

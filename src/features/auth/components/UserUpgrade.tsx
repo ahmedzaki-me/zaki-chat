@@ -33,9 +33,11 @@ export function UserUpgrade({ className }: { className?: string }) {
   const { accessToken, setAuth } = useAuth();
   const {
     token,
+    hasError: turnstileError,
     setToken,
     ref: turnstileRef,
     reset: resetTurnstile,
+    handleError: handleTurnstileError,
     isReady,
   } = useTurnstile();
 
@@ -132,6 +134,9 @@ export function UserUpgrade({ className }: { className?: string }) {
             action="upgrade"
             onSuccess={setToken}
             onExpire={resetTurnstile}
+            onError={handleTurnstileError}
+            hasError={turnstileError}
+            onRetry={resetTurnstile}
           />
 
           <DialogFooter>

@@ -42,9 +42,11 @@ export function GuestLoginForm({
   const { setAuth } = useAuth();
   const {
     token,
+    hasError: turnstileError,
     setToken,
     ref: turnstileRef,
     reset: resetTurnstile,
+    handleError: handleTurnstileError,
     isReady,
   } = useTurnstile();
 
@@ -77,7 +79,7 @@ export function GuestLoginForm({
 
   return (
     <form
-      id="guest-form"
+      id={inline ? "guest-form" : undefined}
       onSubmit={(e) => {
         e.stopPropagation();
         form.handleSubmit(onSubmit)(e);
@@ -87,6 +89,16 @@ export function GuestLoginForm({
     >
       {inline ? (
         <div className="flex flex-col gap-2">
+          <TurnstileWidget
+            ref={turnstileRef}
+            action="guest"
+            onSuccess={setToken}
+            onExpire={resetTurnstile}
+            onError={handleTurnstileError}
+            hasError={turnstileError}
+            onRetry={resetTurnstile}
+          />
+
           {label && (
             <label
               htmlFor="your-name"
@@ -96,13 +108,6 @@ export function GuestLoginForm({
             </label>
           )}
 
-          <TurnstileWidget
-            ref={turnstileRef}
-            action="guest"
-            onSuccess={setToken}
-            onExpire={resetTurnstile}
-          />
-
           <div className="flex flex-col gap-2.5 sm:flex-row sm:items-start">
             <div className="min-w-0 flex-1">
               <InputField
@@ -110,7 +115,7 @@ export function GuestLoginForm({
                 placeholder={placeholder ?? "Your name"}
                 autoComplete="name"
                 autoFocus={autoFocus}
-                className="h-10 text-base sm:h-7 sm:text-sm"
+                className="h-10 text-base sm:text-sm"
                 {...form.register("name")}
                 error={form.formState.errors.name}
               />
@@ -118,7 +123,7 @@ export function GuestLoginForm({
             <Button
               type="submit"
               disabled={isGuestLoading || !isReady}
-              className="h-10 w-full shrink-0 px-4 text-white/90 sm:h-7 sm:w-auto"
+              className="h-10 w-full shrink-0 px-4 text-white/90 sm:w-auto"
             >
               {isGuestLoading ? "Connecting..." : submitLabel}
             </Button>
@@ -148,6 +153,9 @@ export function GuestLoginForm({
             action="guest"
             onSuccess={setToken}
             onExpire={resetTurnstile}
+            onError={handleTurnstileError}
+            hasError={turnstileError}
+            onRetry={resetTurnstile}
           />
 
           {onCancel ? (

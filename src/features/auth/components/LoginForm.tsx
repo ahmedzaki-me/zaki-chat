@@ -1,6 +1,15 @@
+import { useState } from "react";
 import { cn } from "@/shared/lib/utils";
 import { Button } from "@/shared/components/ui/button";
 import { Card, CardContent } from "@/shared/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/shared/components/ui/dialog";
 import {
   Field,
   FieldDescription,
@@ -29,7 +38,16 @@ export function LoginForm({
   className,
   ...props
 }: React.ComponentProps<"div">) {
-  const { token, setToken, ref: turnstileRef, reset: resetTurnstile, isReady } = useTurnstile();
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const {
+    token,
+    hasError: turnstileError,
+    setToken,
+    ref: turnstileRef,
+    reset: resetTurnstile,
+    handleError: handleTurnstileError,
+    isReady,
+  } = useTurnstile();
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -82,12 +100,13 @@ export function LoginForm({
                 label="Password"
                 autoComplete="current-password"
                 extraHeader={
-                  <a
-                    href="/error"
-                    className="text-xs text-muted-foreground underline-offset-4 hover:underline hover:text-foreground"
+                  <button
+                    type="button"
+                    onClick={() => setForgotOpen(true)}
+                    className="cursor-pointer text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
                   >
                     Forgot your password?
-                  </a>
+                  </button>
                 }
                 {...form.register("password")}
                 error={form.formState.errors.password}
@@ -102,6 +121,9 @@ export function LoginForm({
                 action="login"
                 onSuccess={setToken}
                 onExpire={resetTurnstile}
+                onError={handleTurnstileError}
+                hasError={turnstileError}
+                onRetry={resetTurnstile}
               />
 
               <Field>
@@ -134,6 +156,25 @@ export function LoginForm({
           </form>
         </CardContent>
       </Card>
+
+      <Dialog open={forgotOpen} onOpenChange={setForgotOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Password recovery</DialogTitle>
+            <DialogDescription>
+              Zaki Chat does not collect email addresses or phone numbers, so passwords cannot be reset automatically.
+            </DialogDescription>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            If you lost access to your account, you can continue as a guest and message Ahmed directly to start a new thread.
+          </p>
+          <DialogFooter>
+            <Button type="button" onClick={() => setForgotOpen(false)}>
+              Got it
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
