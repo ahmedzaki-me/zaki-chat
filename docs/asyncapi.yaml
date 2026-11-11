@@ -1,11 +1,11 @@
 asyncapi: "2.6.0"
 info:
   title: Zaki Chat Realtime API (Socket.IO)
-  version: "1.0.0"
+  version: "1.0.1"
   description: |
     Official Real-time Event Specification for Zaki Chat API.
     Powered by Socket.IO v4 over WebSocket-only transport (`transports: ["websocket"]`).
-    
+
     ### Handshake Authentication
     Connect with access token in the auth payload:
     ```js
@@ -14,13 +14,18 @@ info:
       auth: { token: "<access-token>" }
     });
     ```
-    
+
     ### Architecture & Rooms
     - `user:<userId>`: Joined by all sockets belonging to that user.
     - `session:<sessionId>`: Joined by all sockets belonging to that session.
     - `owner`: Joined by owner sockets only.
-    - On every client event, the session activity is verified.
-    - Rate limits are applied per socket connection in 10-second fixed windows.
+    - Every client event checks per-socket rate limits in memory first, then verifies session activity in the database.
+    - Rate limits are applied per socket connection in 10-second fixed windows:
+      - `message`: 30 events / 10s (`message:send`, `message:edit`, `message:delete`, `message:delete-permanent`, `reaction:*`)
+      - `read`: 60 events / 10s (`conversation:read`)
+      - `typing`: 40 events / 10s (`typing` - excess events drop silently with `{ ok: true, data: null }` without raising 429 or querying the database)
+      - `other`: 20 events / 10s (`conversation:clear`, `app:visibility`)
+      Exceeded non-typing events receive `{ ok: false, error: ProblemDetails }` with 429 RATE_LIMITED without disconnecting or querying the database.
 
 servers:
   development:
@@ -175,6 +180,14 @@ channels:
       operationId: onPresenceSnapshot
       message:
         $ref: "#/components/messages/PresenceSnapshotEvent"
+
+  user:updated:
+    description: Broadcast when a user or the Owner sets or removes an avatar.
+    subscribe:
+      summary: User Avatar Updated (Server -> Client)
+      operationId: onUserUpdated
+      message:
+        $ref: "#/components/messages/UserUpdatedEvent"
 
 components:
   messages:
@@ -414,3 +427,16 @@ components:
             type: array
             items:
               type: string
+
+    UserUpdatedEvent:
+      title: UserUpdatedEvent
+      payload:
+        type: object
+        required: [id, avatarUrl]
+        properties:
+          id:
+            type: string
+          avatarUrl:
+            type: string
+            format: uri
+            nullable: true

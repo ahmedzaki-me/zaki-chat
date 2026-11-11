@@ -1,7 +1,7 @@
 # 💬 Zaki Chat API
 
 [![Node.js Version](https://img.shields.io/badge/Node.js-%3E%3D24-brightgreen.svg)](https://nodejs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue.svg)](https://www.typescriptlang.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-7.x-blue.svg)](https://www.typescriptlang.org/)
 [![Express](https://img.shields.io/badge/Express-5.x-lightgrey.svg)](https://expressjs.com/)
 [![Socket.IO](https://img.shields.io/badge/Socket.IO-4.x-black.svg)](https://socket.io/)
 [![MongoDB](https://img.shields.io/badge/MongoDB-Mongoose%209-green.svg)](https://mongoosejs.com/)
@@ -51,7 +51,7 @@
 
 ### 4. Real-Time Engine & Dual-View Serialization
 
-- Pure WebSocket transport (`transports: ["websocket"]`) with per-event session validation and fixed-window rate limiting.
+- Pure WebSocket transport (`transports: ["websocket"]`) with fixed-window in-memory rate limiting evaluated before per-event session validation.
 - **Dual-View Serialization:** Broadcasts use a role-aware mapper (`toBoth`). The Owner socket receives full metadata (including edit history and soft-deleted content placeholders), while regular users receive a sanitized DTO.
 - **Presence & Ephemeral Typing:** Real-time presence updates and snapshots sent strictly to the Owner. Typing indicators are purely ephemeral and forwarded without database overhead.
 
@@ -81,9 +81,9 @@
 ```
 zaki-chat-api/
 ├── docs/
-│   ├── openapi.yalm             # Full REST API OpenAPI 3.1.0 specification
-│   ├── openapi.yaml             # Standard YAML alias for OpenAPI
-│   └── asyncapi.yaml            # Socket.IO Realtime Event specification (AsyncAPI 2.6)
+│   ├── openapi.yaml             # Full REST API OpenAPI 3.1.0 specification
+│   ├── asyncapi.yaml            # Socket.IO Realtime Event specification (AsyncAPI 2.6)
+│   └── socket-io.md             # Socket.IO developer guide & event reference
 ├── src/
 │   ├── config/
 │   │   └── env.ts               # Zod-validated environment config & keyrings
@@ -122,7 +122,7 @@ zaki-chat-api/
 │   │   ├── bus.ts               # Internal decoupled event emitter
 │   │   ├── publisher.ts         # Broadcasts & dual-view serialization
 │   │   └── handler.ts           # Ack wrapper & per-socket rate limiting
-│   ├── scripts/                 # CLI utilities (create-owner, generate-vapid, test-b2)
+│   ├── scripts/                 # CLI utilities (create-owner, generate-vapid)
 │   ├── shared/                  # AES encryption, S3 storage adapter, errors, policies
 │   │   ├── crypto/              # message-crypto.ts
 │   │   ├── errors/              # RFC 7807 ProblemDetails & AppError
@@ -234,7 +234,8 @@ Once the server is running, navigate in your browser to:
 | :----------------------------------------- | :----------------------------------------- | :----------------------------------------------------------------------------------------------------------- |
 | **REST API Documentation (Swagger UI)**    | `http://localhost:3000/docs`               | Interactive Swagger UI detailing all 25+ REST endpoints, schemas, validation errors, and RFC 7807 responses. |
 | **Real-time API Documentation (AsyncAPI)** | `http://localhost:3000/docs/socket`        | Interactive AsyncAPI UI documenting all Socket.IO client/server events, payloads, rooms, and rate limits.    |
-| **Raw OpenAPI YAML Specification**         | `http://localhost:3000/docs/openapi.yaml`  | Machine-readable OpenAPI 3.1.0 document (`openapi.yalm`).                                                    |
+| **Real-time API Markdown Guide**           | [`docs/socket-io.md`](docs/socket-io.md)   | Comprehensive developer guide and quick reference for all Socket.IO events and throttling rules.              |
+| **Raw OpenAPI YAML Specification**         | `http://localhost:3000/docs/openapi.yaml`  | Machine-readable OpenAPI 3.1.0 document.                                                                     |
 | **Raw AsyncAPI YAML Specification**        | `http://localhost:3000/docs/asyncapi.yaml` | Machine-readable AsyncAPI 2.6.0 document.                                                                    |
 
 ---
@@ -261,7 +262,7 @@ Frontend clients obtain a widget challenge token and send it with the request us
   *(The middleware automatically sanitizes and removes `turnstileToken` from `req.body` to preserve strict Zod validation schema integrity).*
 
 #### Multi-Layer Defense Pipeline
-To ensure maximum resource protection, authentication middleware runs in a strict defense sequence:
+To ensure maximum resource protection, Turnstile-guarded authentication middleware runs in a strict defense sequence (with `requireAuth` inserted after `ipAuthLimiter` on `/upgrade`, and `strictAccountLimiter` omitted on `/guest`; `/refresh` and `/logout` use `sessionTokenLimiter` only):
 ```
 Request ──► [1. ipAuthLimiter] ──► [2. verifyTurnstile] ──► [3. globalAuthLimiter] ──► [4. strictAccountLimiter] ──► Controller
 ```
@@ -272,16 +273,20 @@ Request ──► [1. ipAuthLimiter] ──► [2. verifyTurnstile] ──► [3
 
 ### 2. HTTP Multi-Layered Rate Limiting (`express-rate-limit`)
 
-All REST endpoints are protected with standard RFC headers (`RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset`, `Retry-After`) and return RFC 7807 Problem Details JSON (`429 Too Many Requests`).
+Protected API and documentation endpoints emit standard RFC headers (`RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset`, `Retry-After`) and return RFC 7807 Problem Details JSON (`429 Too Many Requests`) when throttled (`GET /` and `GET /health` are unthrottled so platform health probes never fail with 429).
 
 | Limiter Layer | Scope / Key | Window | Max Quota | Policy & Target Routes |
 | :--- | :--- | :---: | :---: | :--- |
-| **`globalAuthLimiter`** | Global circuit breaker (`'global_auth_limit'`) | 1 min | **150** | Prevents distributed rotating-proxy flooding on all authentication endpoints (`/guest`, `/login`, `/signup`, `/upgrade`, `/refresh`, `/logout`). |
-| **`ipAuthLimiter`** | Per-client IP (IPv6 subnet normalized) | 15 min | **15** | Shields auth endpoints from credential stuffing and bot brute-force per IP. |
-| **`strictAccountLimiter`** | Per-Account via `smartKeyGenerator` (`account:<username>` or `user:<id>`) | 15 min | **5** | **`skipSuccessfulRequests: true`**: Only penalizes failed attempts (4xx/5xx). Protects `/login`, `/signup`, and `/upgrade`. |
-| **`generalApiLimiter`** | Per-User via `smartKeyGenerator` (`user:<id>`) or fallback IP | 1 min | **60** | Evaluated **immediately after** `requireAuth` to guarantee legitimate users on shared NAT/corporate IPs are never penalized. Applied across `/messages`, `/conversations`, `/uploads`, `/users`, and `/push`. |
+| **`globalAuthLimiter`** | Global circuit breaker (`'global_auth_limit'`) | 1 min | **150** | Prevents distributed rotating-proxy flooding on Turnstile-guarded authentication endpoints (`/guest`, `/login`, `/signup`, `/upgrade`). Not applied to `/refresh` or `/logout`. |
+| **`ipAuthLimiter`** | Per-client IP (IPv6 subnet normalized) | 15 min | **15** | Shields Turnstile-guarded auth endpoints from credential stuffing and bot brute-force per IP (`/guest`, `/login`, `/signup`, `/upgrade`). |
+| **`sessionTokenLimiter`** | Per-client IP (IPv6 subnet normalized) | 1 min | **30** | Dedicated per-IP limiter isolated from `ipAuthLimiter` for session token lifecycle flows (`/refresh`, `/logout`). |
+| **`strictAccountLimiter`** | Per-Account via `smartKeyGenerator` (`account:<username>:<ip>` or `user:<id>`) | 15 min | **5** | **`skipSuccessfulRequests: true`**: Only penalizes failed attempts (4xx/5xx). Protects `/login`, `/signup`, and `/upgrade`. |
+| **`generalApiLimiter`** | Per-User via `smartKeyGenerator` (`user:<id>`) or fallback IP | 1 min | **60** | Applied across `/auth/me`, `/auth/logout-all`, `/auth/sessions*`, `/messages`, `/conversations`, `/uploads`, `/users`, and `/push` (including public `/push/config`). |
+| **`docsLimiter`** | Per-client IP (IPv6 subnet normalized) | 1 min | **300** | Protects documentation endpoints against spam/DDoS (`/docs`, `/docs/socket`, `/docs/asyncapi`, `/docs/openapi.yaml`, `/docs/asyncapi.yaml`). `GET /` and `GET /health` have no limiter. |
 
 ### 3. Socket.IO Fixed-Window Throttling (Per 10 Seconds)
+
+Checked in memory per socket **before** querying MongoDB for session activity (`assertSessionActive`):
 
 | Category      | Events                                                                                     | Max Events / 10s | Behavior upon Exceeding                                              |
 | :------------ | :----------------------------------------------------------------------------------------- | :--------------: | :------------------------------------------------------------------- |
@@ -292,13 +297,11 @@ All REST endpoints are protected with standard RFC headers (`RateLimit-Limit`, `
 
 ---
 
-## 🧪 Testing & Verification Utilities
+## 🛠️ CLI & Setup Utilities
 
-The repository includes ready-to-run verification scripts in `src/scripts/`:
+The repository includes operational CLI scripts in `src/scripts/`:
 
 - `npm run create-owner`: Set up the initial administrator/owner account.
-- `npm run test-b2`: Verify connectivity and read/write permissions on the S3 bucket.
-- `npm run test-upload`: Simulate client presigned upload, binary magic-byte validation, and download cycle.
 - `npm run generate-vapid`: Generate a valid VAPID keypair for Web Push notifications.
 
 ---

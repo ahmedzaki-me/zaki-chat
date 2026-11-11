@@ -1,8 +1,18 @@
 openapi: 3.1.0
 info:
   title: Zaki Chat API
-  version: 1.0.0
-  description: HTTP contract maintained from the current implementation. Socket.IO events are documented in docs/socket-io.md.
+  version: 1.0.1
+  description: |
+    HTTP contract maintained from the current implementation. Socket.IO events are documented in docs/socket-io.md and docs/asyncapi.yaml (interactive at /docs/socket).
+
+    ### HTTP Rate Limiting
+    - `globalAuthLimiter`: 150 requests / 1 min (shared circuit breaker) on `/auth/guest`, `/auth/signup`, `/auth/login`, `/auth/upgrade`.
+    - `ipAuthLimiter`: 15 requests / 15 min per IP on `/auth/guest`, `/auth/signup`, `/auth/login`, `/auth/upgrade`.
+    - `sessionTokenLimiter`: 30 requests / 1 min per IP on `/auth/refresh` and `/auth/logout` (isolated from `ipAuthLimiter`; not subject to `globalAuthLimiter` or Turnstile).
+    - `strictAccountLimiter`: 5 failed attempts / 15 min (`skipSuccessfulRequests: true`; key `account:<username>:<ip>` when unauthenticated, `user:<id>` when authenticated) on `/auth/signup`, `/auth/login`, `/auth/upgrade`.
+    - `generalApiLimiter`: 60 requests / 1 min (`user:<id>` or fallback IP) on `/auth/me`, `/auth/logout-all`, `/auth/sessions*`, `/conversations*`, `/messages*`, `/uploads*`, `/users*`, `/push*`.
+    - `docsLimiter`: 300 requests / 1 min per IP on `/docs` (Swagger UI, AsyncAPI UI, and raw YAML specs).
+    - Unthrottled: `GET /` and `GET /health` have no rate limiter.
 x-socketio-events:
   conversation:read:
     payload:
@@ -112,6 +122,21 @@ x-socketio-events:
           items:
             type: string
     description: Sent only to an owner socket when it connects; contains currently connected ordinary-user account IDs.
+  user:updated:
+    payload:
+      type: object
+      required:
+        - id
+        - avatarUrl
+      properties:
+        id:
+          type: string
+        avatarUrl:
+          type:
+            - string
+            - "null"
+          format: uri
+    description: Emitted when a user or the owner sets or removes an avatar. Regular user updates emit to the owner room and that user's room; owner updates emit to all connected sockets.
   rateLimits:
     windowMs: 10000
     groups:
@@ -119,8 +144,8 @@ x-socketio-events:
       conversation:read: 60
       typing: 40
       other: 20
-    description: Limits are per socket. Exceeded non-typing events receive 429 RATE_LIMITED without disconnect. Excess typing events are silently dropped and acknowledged successfully.
-  lifecycle: The access-token expiry is checked at handshake only. Session activity is rechecked for each event; revoking one session disconnects its sockets and revoking all sessions disconnects all sockets for that account.
+    description: Limits are checked per socket in memory before session activity verification. Exceeded non-typing events receive 429 RATE_LIMITED without disconnect. Excess typing events are silently dropped and acknowledged successfully.
+  lifecycle: The access-token expiry is checked at handshake only. For non-rate-limited events, session activity is rechecked on each event; revoking one session disconnects its sockets and revoking all sessions disconnects all sockets for that account.
   delivery: A message is delivered when its recipient account has an active socket, or when that account next connects. Read advances delivered too. The owner's personal conversation has unreadCount 0 and null peer markers, and receipt writes are skipped.
 x-web-push:
   env:
@@ -166,6 +191,8 @@ paths:
                       - "null"
                   message:
                     type: string
+        "429":
+          $ref: "#/components/responses/RateLimited"
         default: &a1
           description: Operation-specific error; status and code depend on the failure.
           content:
@@ -238,6 +265,7 @@ paths:
       tags:
         - Health
       summary: Root greeting
+      description: Unthrottled public greeting endpoint (no rate limiter).
       responses:
         "200":
           description: Plain text greeting
@@ -254,6 +282,7 @@ paths:
       tags:
         - Health
       summary: Service and database health
+      description: Unthrottled health probe returning Mongoose connection readiness (no rate limiter).
       responses:
         "200":
           description: Health status (database connected)
@@ -294,6 +323,7 @@ paths:
       tags:
         - Auth
       summary: Create a guest account and session
+      description: Protected by ipAuthLimiter (15 req / 15 min per IP), Cloudflare Turnstile, and globalAuthLimiter (150 req / 1 min shared).
       requestBody:
         required: true
         content:
@@ -302,7 +332,7 @@ paths:
               $ref: "#/components/schemas/GuestRequest"
       responses:
         "201":
-          description: Session created; sets refresh_token cookie
+          description: Session created; sets zaki_chat_refresh_token cookie
           content:
             application/json:
               schema:
@@ -330,6 +360,7 @@ paths:
       tags:
         - Auth
       summary: Register an account and session
+      description: Protected by ipAuthLimiter (15 req / 15 min per IP), Cloudflare Turnstile, globalAuthLimiter (150 req / 1 min shared), and strictAccountLimiter (5 failed attempts / 15 min per account:<username>:<ip>).
       requestBody:
         required: true
         content:
@@ -338,7 +369,7 @@ paths:
               $ref: "#/components/schemas/SignupRequest"
       responses:
         "201":
-          description: Account and session created; sets refresh_token cookie
+          description: Account and session created; sets zaki_chat_refresh_token cookie
           content:
             application/json:
               schema:
@@ -372,6 +403,7 @@ paths:
       tags:
         - Auth
       summary: Log in and create a session
+      description: Protected by ipAuthLimiter (15 req / 15 min per IP), Cloudflare Turnstile, globalAuthLimiter (150 req / 1 min shared), and strictAccountLimiter (5 failed attempts / 15 min per account:<username>:<ip>).
       requestBody:
         required: true
         content:
@@ -380,7 +412,7 @@ paths:
               $ref: "#/components/schemas/LoginRequest"
       responses:
         "200":
-          description: Session created; sets refresh_token cookie
+          description: Session created; sets zaki_chat_refresh_token cookie
           content:
             application/json:
               schema:
@@ -414,6 +446,7 @@ paths:
       tags:
         - Auth
       summary: Upgrade the authenticated guest account
+      description: Protected by ipAuthLimiter (15 req / 15 min per IP), JWT authentication, Cloudflare Turnstile, globalAuthLimiter (150 req / 1 min shared), and strictAccountLimiter (5 failed attempts / 15 min per user:<id>).
       security: *a2
       requestBody:
         required: true
@@ -464,17 +497,20 @@ paths:
                 properties:
                   user:
                     $ref: "#/components/schemas/User"
+        "429":
+          $ref: "#/components/responses/RateLimited"
         default: *a1
   /auth/refresh:
     post:
       tags:
         - Auth
       summary: Rotate refresh token and issue access token
+      description: Protected by sessionTokenLimiter only (30 req / 1 min per IP). Isolated from ipAuthLimiter and not subject to globalAuthLimiter or Turnstile.
       security:
         - refreshCookie: []
       responses:
         "200":
-          description: Token refreshed; rotates refresh_token cookie
+          description: Token refreshed; rotates zaki_chat_refresh_token cookie
           content:
             application/json:
               schema:
@@ -485,6 +521,8 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetails"
+        "429":
+          $ref: "#/components/responses/RateLimited"
         "500":
           description: Unexpected server error
           content:
@@ -496,7 +534,7 @@ paths:
       tags:
         - Auth
       summary: Revoke refresh-token session if supplied
-      description: Public. The refresh_token cookie is optional; if present its session is revoked. The cookie is cleared in either case.
+      description: Public. The zaki_chat_refresh_token cookie is optional; if present its session is revoked. The cookie is cleared in either case. Protected by sessionTokenLimiter only (30 req / 1 min per IP; isolated from ipAuthLimiter and not subject to globalAuthLimiter or Turnstile).
       responses: &a3
         "204": &a4
           description: No content
@@ -509,7 +547,11 @@ paths:
         - Auth
       summary: Revoke all current user's sessions
       security: *a2
-      responses: *a3
+      responses:
+        "204": *a4
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        default: *a1
   /auth/sessions:
     get:
       tags:
@@ -530,6 +572,8 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/Session"
+        "429":
+          $ref: "#/components/responses/RateLimited"
         default: *a1
   /auth/sessions/{id}:
     delete:
@@ -547,6 +591,8 @@ paths:
             pattern: ^[0-9a-f]{24}$
       responses:
         "204": *a4
+        "429":
+          $ref: "#/components/responses/RateLimited"
         default: *a1
   /conversations:
     get:
@@ -1003,8 +1049,8 @@ components:
     refreshCookie:
       type: apiKey
       in: cookie
-      name: refresh_token
-      description: HttpOnly, SameSite=Strict, path=/auth; Secure in production. Refresh requires it; logout accepts it optionally.
+      name: zaki_chat_refresh_token
+      description: HttpOnly, SameSite=Strict, path=/api/v1/auth; Secure in production. Refresh requires it; logout accepts it optionally.
   schemas:
     ProblemDetails:
       type: object
